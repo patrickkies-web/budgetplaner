@@ -18,6 +18,19 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
   const [uploading, setUploading] = useState(false);
   const sectionRef = useRef(null);
 
+  const resetForm = () => {
+    setAmount("");
+    setDesc("");
+    setDate(todayISO());
+    setCreditId(credits[0]?.id || "k1");
+    setFoerder(false);
+    setPct("");
+    setPaid(false);
+    setPayTo(null);
+    setCategory("");
+    setFiles([]);
+  };
+
   useEffect(() => {
     if (!initial) return;
     setAmount(String(initial.amount || ""));
@@ -83,16 +96,13 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
       onUpdate(exp);
     } else {
       onAdd(exp);
-      setAmount("");
-      setDesc("");
-      setPct("");
-      setFoerder(false);
-      setPaid(false);
-      setPayTo(null);
-      setCategory("");
-      setFiles([]);
-      setDate(todayISO());
     }
+    resetForm();
+  };
+
+  const handleCancel = () => {
+    resetForm();
+    onCancelEdit();
   };
 
   const isEditMode = !!initial;
@@ -326,7 +336,7 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
         {isEditMode ? "Änderungen speichern" : "Ausgabe hinzufügen"}
       </button>
       {isEditMode && (
-        <button className="bt-cancel" onClick={onCancelEdit}>
+        <button className="bt-cancel" onClick={handleCancel}>
           Abbrechen
         </button>
       )}
