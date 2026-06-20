@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { parseNum, clamp, eur, todayISO } from "../utils/format";
-import { processFile, attachSet } from "../utils/attachments";
+import { processFile, attachSet, attachDel } from "../utils/attachments";
 
-export default function ExpenseForm({ credits, categories, onAdd, onAddCategory }) {
+export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCancelEdit, initial, onAddCategory }) {
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
   const [date, setDate] = useState(todayISO());
@@ -16,6 +16,22 @@ export default function ExpenseForm({ credits, categories, onAdd, onAddCategory 
   const [newCat, setNewCat] = useState("");
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const sectionRef = useRef(null);
+
+  useEffect(() => {
+    if (!initial) return;
+    setAmount(String(initial.amount || ""));
+    setDesc(initial.desc || "");
+    setDate(initial.date || todayISO());
+    setCreditId(initial.creditId || credits[0]?.id || "k1");
+    setFoerder(!!initial.foerderfaehig);
+    setPct(initial.foerderPercent ? String(initial.foerderPercent) : "");
+    setPaid(!!initial.ausgezahlt);
+    setPayTo(initial.auszahlKonto || null);
+    setCategory(initial.category || "");
+    setFiles((initial.attachments || []).map((a) => ({ ...a, isExisting: true })));
+    sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [initial]);
 
   const confirmAddCat = () => {
     const n = newCat.trim();
@@ -34,18 +50,24 @@ export default function ExpenseForm({ credits, categories, onAdd, onAddCategory 
     for (const f of Array.from(list)) {
       const att = await processFile(f);
       if (att) added.push(att);
-      else window.alert(`„${f.name}" ist zu groß oder wird nicht unterstützt.`);
+      else window.alert(`"${f.name}" ist zu groß oder wird nicht unterstützt.`);
     }
     setFiles((prev) => [...prev, ...added]);
     setUploading(false);
   };
 
-  const removeFile = (id) => setFiles((prev) => prev.filter((f) => f.id !== id));
+  const removeFile = (id) => {
+    const f = files.find((f) => f.id === id);
+    if (f?.isExisting) attachDel(f.id);
+    setFiles((prev) => prev.filter((f) => f.id !== id));
+  };
 
   const submit = async () => {
     if (!valid) return;
-    for (const f of files) await attachSet(f.id, f.dataURL);
-    onAdd({
+    for (const f of files) {
+      if (!f.isExisting && f.dataURL) await attachSet(f.id, f.dataURL);
+    }
+    const exp = {
       amount: parseNum(amount),
       desc: desc.trim(),
       date,
@@ -56,21 +78,28 @@ export default function ExpenseForm({ credits, categories, onAdd, onAddCategory 
       ausgezahlt: foerder ? paid : false,
       auszahlKonto: foerder && paid ? payTo || creditId : null,
       attachments: files.map(({ id, name, type }) => ({ id, name, type })),
-    });
-    setAmount("");
-    setDesc("");
-    setPct("");
-    setFoerder(false);
-    setPaid(false);
-    setPayTo(null);
-    setCategory("");
-    setFiles([]);
-    setDate(todayISO());
+    };
+    if (initial) {
+      onUpdate(exp);
+    } else {
+      onAdd(exp);
+      setAmount("");
+      setDesc("");
+      setPct("");
+      setFoerder(false);
+      setPaid(false);
+      setPayTo(null);
+      setCategory("");
+      setFiles([]);
+      setDate(todayISO());
+    }
   };
 
+  const isEditMode = !!initial;
+
   return (
-    <section className="bt-form">
-      <h2 className="bt-h2">Neue Ausgabe</h2>
+    <section className={"bt-form" + (isEditMode ? " is-editing" : "")} ref={sectionRef}>
+      <h2 className="bt-h2">{isEditMode ? "Ausgabe bearbeiten" : "Neue Ausgabe"}</h2>
 
       <div className="bt-form-grid">
         <div className="bt-field bt-col-amt">
@@ -278,7 +307,7 @@ export default function ExpenseForm({ credits, categories, onAdd, onAddCategory 
           <div className="bt-files">
             {files.map((f) => (
               <span className="bt-file" key={f.id}>
-                <span className="bt-file-ic">{f.type.startsWith("image/") ? "🖼" : "📄"}</span>
+                <span className="bt-file-ic">{f.type && f.type.startsWith("image/") ? "🖼" : "📄"}</span>
                 <span className="bt-file-name">{f.name}</span>
                 <button
                   className="bt-file-x"
@@ -294,8 +323,13 @@ export default function ExpenseForm({ credits, categories, onAdd, onAddCategory 
       </div>
 
       <button className="bt-add" disabled={!valid || uploading} onClick={submit}>
-        Ausgabe hinzufügen
+        {isEditMode ? "Änderungen speichern" : "Ausgabe hinzufügen"}
       </button>
+      {isEditMode && (
+        <button className="bt-cancel" onClick={onCancelEdit}>
+          Abbrechen
+        </button>
+      )}
     </section>
   );
 }
