@@ -104,6 +104,7 @@ export default function Style() {
 
 /* form */
 .bt-form{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;margin-bottom:16px}
+.bt-form.is-editing{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .bt-h2{font-family:var(--fd);font-size:16px;font-weight:600;margin:0 0 14px;letter-spacing:-.01em}
 .bt-form-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:12px}
 .bt-field{margin-bottom:14px}
@@ -187,6 +188,11 @@ export default function Style() {
 }
 .bt-add:hover:not(:disabled){background:#000}
 .bt-add:disabled{background:var(--track);color:var(--faint);cursor:not-allowed}
+.bt-cancel{
+  width:100%;margin-top:8px;border:1px solid var(--line);background:var(--surface);color:var(--muted);
+  font-family:var(--fb);font-size:15px;font-weight:600;padding:12px;border-radius:var(--r-md);cursor:pointer;transition:.15s;
+}
+.bt-cancel:hover{background:var(--bg);color:var(--ink)}
 
 /* list */
 .bt-list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 18px 8px}
@@ -211,11 +217,17 @@ export default function Style() {
 .bt-chip.is-cat{background:#EAF0FF;color:#2453C2}
 .bt-chip.is-file{font-family:var(--fb);font-size:11px;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:3px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bt-chip.is-file:hover{border-color:var(--accent);color:var(--accent)}
+.bt-row-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
 .bt-del{
   flex:0 0 auto;width:28px;height:28px;border-radius:8px;border:1px solid var(--line-soft);
   background:var(--surface);color:var(--faint);font-size:18px;line-height:1;cursor:pointer;transition:.15s;
 }
 .bt-del:hover{background:#FCEBEB;border-color:#F6D4D4;color:var(--warn)}
+.bt-edit{
+  flex:0 0 auto;width:28px;height:28px;border-radius:8px;border:1px solid var(--line-soft);
+  background:var(--surface);color:var(--faint);font-size:14px;line-height:1;cursor:pointer;transition:.15s;
+}
+.bt-edit:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 
 /* stat sub-line */
 .bt-stat-sub{font-size:10.5px;color:var(--faint);margin-top:3px;font-weight:500}

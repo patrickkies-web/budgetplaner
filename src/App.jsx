@@ -17,6 +17,7 @@ function structuredCloneSafe(obj) {
 export default function App() {
   const [state, setState] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
   const loadedOnce = useRef(false);
 
   useEffect(() => {
@@ -93,6 +94,12 @@ export default function App() {
   const addExpense = (exp) =>
     update((s) => {
       s.expenses.unshift({ id: uid(), ...exp });
+      return s;
+    });
+
+  const updateExpense = (id, changes) =>
+    update((s) => {
+      s.expenses = s.expenses.map((e) => (e.id === id ? { ...e, ...changes } : e));
       return s;
     });
 
@@ -340,6 +347,12 @@ export default function App() {
           credits={state.credits}
           categories={state.categories || CATEGORIES}
           onAdd={addExpense}
+          onUpdate={(changes) => {
+            updateExpense(editingExpense.id, changes);
+            setEditingExpense(null);
+          }}
+          onCancelEdit={() => setEditingExpense(null)}
+          initial={editingExpense}
           onAddCategory={addCategory}
         />
 
@@ -405,13 +418,22 @@ export default function App() {
                         ))}
                       </div>
                     </div>
-                    <button
-                      className="bt-del"
-                      onClick={() => deleteExpense(e.id)}
-                      aria-label="Ausgabe löschen"
-                    >
-                      ×
-                    </button>
+                    <div className="bt-row-actions">
+                      <button
+                        className="bt-edit"
+                        onClick={() => setEditingExpense(e)}
+                        aria-label="Ausgabe bearbeiten"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        className="bt-del"
+                        onClick={() => deleteExpense(e.id)}
+                        aria-label="Ausgabe löschen"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </li>
                 );
               })}
