@@ -36,38 +36,45 @@ export default function App() {
     state.credits.forEach((c) => {
       perCredit[c.id] = { total: c.total || 0, spent: 0, payout: 0 };
     });
-    let spent = 0, refund = 0;
+    let spent = 0, refund = 0, creditSpent = 0;
     let privSpent = 0, privPayout = 0;
-    let refundPaid = 0;
+    let refundPaid = 0, creditRefundPaid = 0;
     state.expenses.forEach((e) => {
       const amt = e.amount || 0;
       const r = e.foerderfaehig ? amt * ((e.foerderPercent || 0) / 100) : 0;
       spent += amt;
       refund += r;
       if (e.creditId === "priv") privSpent += amt;
-      else if (perCredit[e.creditId]) perCredit[e.creditId].spent += amt;
+      else {
+        creditSpent += amt;
+        if (perCredit[e.creditId]) perCredit[e.creditId].spent += amt;
+      }
       if (e.foerderfaehig && e.ausgezahlt) {
         refundPaid += r;
         const acc = e.auszahlKonto || e.creditId;
         if (acc === "priv") privPayout += r;
-        else if (perCredit[acc]) perCredit[acc].payout += r;
-        else privPayout += r;
+        else {
+          creditRefundPaid += r;
+          if (perCredit[acc]) perCredit[acc].payout += r;
+          else privPayout += r;
+        }
       }
     });
     const baseBudget = state.credits.reduce((s, c) => s + (c.total || 0), 0);
-    const budget = baseBudget + refundPaid;
+    const budget = baseBudget + creditRefundPaid;
     return {
       perCredit,
       baseBudget,
       budget,
       spent,
+      creditSpent,
       refund,
       refundPaid,
       refundOpen: refund - refundPaid,
       privSpent,
       privPayout,
       privRemaining: privPayout - privSpent,
-      remaining: budget - spent,
+      remaining: budget - creditSpent,
       effective: spent - refund,
     };
   }, [state]);
@@ -246,10 +253,10 @@ export default function App() {
             {eur(calc.remaining)}
           </div>
 
-          <Meter total={calc.budget + calc.refundOpen} effective={calc.spent} refund={calc.refundOpen} />
+          <Meter total={calc.budget + calc.refundOpen} effective={calc.creditSpent} refund={calc.refundOpen} />
 
           <div className="bt-legend">
-            <Legend swatch="ink" label="Ausgegeben" value={eur0(calc.spent)} />
+            <Legend swatch="ink" label="Ausgegeben (Kredit)" value={eur0(calc.creditSpent)} />
             <Legend swatch="accent" label="Förderung kommt noch" value={eur0(calc.refundOpen)} />
             <Legend swatch="track" label="Verfügbar" value={eur0(Math.max(calc.remaining, 0))} />
           </div>
@@ -260,7 +267,7 @@ export default function App() {
               value={eur(calc.budget)}
               sub={calc.refundPaid > 0 ? `inkl. ${eur0(calc.refundPaid)} Förderung` : null}
             />
-            <Stat label="Ausgegeben" value={eur(calc.spent)} />
+            <Stat label="Ausgegeben gesamt" value={eur(calc.spent)} sub={calc.privSpent > 0 ? `davon ${eur0(calc.privSpent)} privat` : null} />
             <Stat
               label="Erw. Förderung"
               value={eur(calc.refund)}
