@@ -1,0 +1,56 @@
+//@version=6
+// =============================================================================
+// Startzeitpunkt-Marker  (MVP / Skelett)
+// =============================================================================
+// Zweck dieser Datei:
+//   Erster Baustein eines TradingView-Indikators. Hier geht es ausschliesslich
+//   um die MECHANIK des Startzeitpunkts:
+//     - Beim Hinzufuegen aus der Indikatorliste fragt TradingView dank
+//       "confirm = true" sofort: "Bitte auf den Chart klicken" -> der Nutzer
+//       waehlt den Startzeitpunkt per Klick auf die gewuenschte Kerze.
+//     - Nachtraeglich laesst sich derselbe Zeitpunkt im Einstellungs-Dialog
+//       ueber den Kalender (Datum + Uhrzeit) fein justieren.
+//
+//   Es wird (noch) nichts gerechnet. Angezeigt wird nur eine senkrechte
+//   Markierung an der Kerze, ab der spaeter gerechnet werden soll.
+//
+// Status: "ruhend" - diese Datei ist nicht mit der Webapp/dem Build verbunden.
+//         Sie dient als Vorlage, die bei Bedarf in TradingView eingefuegt wird.
+// =============================================================================
+
+indicator("Startzeitpunkt-Marker", overlay = true)
+
+// -----------------------------------------------------------------------------
+// Eingabe: Startzeitpunkt
+// -----------------------------------------------------------------------------
+// input.time(...) erzeugt im Dialog einen Kalender + Uhrzeit-Picker.
+// confirm = true  ->  beim Einfuegen erst auf den Chart klicken lassen.
+// Der erste Parameter ist nur der Default-Wert (falls man den Klick ueberspringt).
+startTime = input.time(timestamp("2024-01-01 00:00 +0000"), "Startzeitpunkt", confirm = true)
+
+// -----------------------------------------------------------------------------
+// Markierung: erste Kerze ab dem gewaehlten Startzeitpunkt
+// -----------------------------------------------------------------------------
+// "isStartBar" ist genau auf der ersten Kerze true, deren Zeit >= startTime ist.
+isStartBar = time >= startTime and time[1] < startTime
+
+if isStartBar
+    // Senkrechte Linie quer durch den sichtbaren Bereich an dieser Kerze.
+    line.new(x1     = bar_index, y1 = low,
+              x2     = bar_index, y2 = high,
+              extend = extend.both,
+              color  = color.orange,
+              width  = 2)
+
+    // Beschriftung am oberen Rand, damit der Startpunkt klar erkennbar ist.
+    label.new(x     = bar_index, y = high,
+              text   = "Start",
+              style  = label.style_label_down,
+              color  = color.orange,
+              textcolor = color.white,
+              yloc   = yloc.abovebar)
+
+// Optional sichtbare Zone: alles ab dem Startzeitpunkt dezent einfaerben,
+// damit der Rechenbereich auf einen Blick erkennbar ist.
+inRange = time >= startTime
+bgcolor(inRange ? color.new(color.orange, 92) : na)
