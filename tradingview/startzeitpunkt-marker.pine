@@ -16,6 +16,18 @@
 //
 // Status: "ruhend" - diese Datei ist nicht mit der Webapp/dem Build verbunden.
 //         Sie dient als Vorlage, die bei Bedarf in TradingView eingefuegt wird.
+//
+// -----------------------------------------------------------------------------
+// ANNAHME: Heikin-Ashi-Chart
+// -----------------------------------------------------------------------------
+//   Dieser Indikator wird IMMER auf einem Heikin-Ashi-Chart angewendet.
+//   Folge: Die eingebauten Werte open / high / low / close liefern bereits die
+//   Heikin-Ashi-Werte des Charts. Es muss daher NICHTS ueber
+//   ticker.heikinashi() / request.security() nachgerechnet werden - spaetere
+//   Logik nutzt einfach direkt close, open, high, low.
+//
+//   Achtung: Gilt nur, solange der Chart tatsaechlich auf Heikin Ashi steht.
+//   Auf einem normalen Kerzen-Chart wuerden normale Werte verwendet.
 // =============================================================================
 
 indicator("Startzeitpunkt-Marker", overlay = true)
