@@ -18,16 +18,35 @@
 //         Sie dient als Vorlage, die bei Bedarf in TradingView eingefuegt wird.
 //
 // -----------------------------------------------------------------------------
-// ANNAHME: Heikin-Ashi-Chart
+// ARCHITEKTUR / VERBINDLICHE SPEZIFIKATION  (Stand: 2026-06-26)
 // -----------------------------------------------------------------------------
-//   Dieser Indikator wird IMMER auf einem Heikin-Ashi-Chart angewendet.
-//   Folge: Die eingebauten Werte open / high / low / close liefern bereits die
-//   Heikin-Ashi-Werte des Charts. Es muss daher NICHTS ueber
-//   ticker.heikinashi() / request.security() nachgerechnet werden - spaetere
-//   Logik nutzt einfach direkt close, open, high, low.
+//   1) STARTZEITPUNKT
+//      Der Nutzer waehlt per Chart-Klick (input.time, confirm=true) den Punkt,
+//      ab dem ueberhaupt ausgewertet wird. Vor dem Startzeitpunkt: nichts.
 //
-//   Achtung: Gilt nur, solange der Chart tatsaechlich auf Heikin Ashi steht.
-//   Auf einem normalen Kerzen-Chart wuerden normale Werte verwendet.
+//   2) GRUND-RECHEN-ZEITEINHEIT = 2H  (Heikin Ashi)
+//      Die gesamte Logik (Kerzen-Abfolge / Rhythmus / Trend) wird AUSSCHLIESSLICH
+//      auf dem 2-Stunden-Heikin-Ashi-Frame gerechnet - ab dem Startzeitpunkt.
+//      2H ist die feste Grundzeiteinheit, unabhaengig davon, welche Zeiteinheit
+//      der Chart gerade anzeigt.
+//
+//   3) VISUALISIERUNG AUF ALLEN ZEITEINHEITEN
+//      Die gewuenschten visuellen Elemente (Marker, Linien, ...) sollen auf
+//      JEDER Chart-Zeiteinheit sichtbar sein - nicht nur auf 2H.
+//
+//   TECHNISCHE FOLGE (wichtig!):
+//      Weil der Chart NICHT zwingend auf 2H steht, duerfen wir NICHT das native
+//      open/high/low/close verwenden (das waere die HA-Kerze der Chart-TF).
+//      Die 2H-Heikin-Ashi-Werte muessen EXPLIZIT angefordert werden:
+//          ha2h = ticker.heikinashi(syminfo.tickerid)
+//          c2h  = request.security(ha2h, "120", close, barmerge.gaps_off,
+//                                  barmerge.lookahead_off)
+//      Repaint-Schutz: lookahead_off + Auswertung am bestaetigten Bar-Schluss
+//      (barstate.isconfirmed), analog zum Referenz-Indikator.
+//
+//      Sonderfall: Steht der Chart selbst auf 2H-HA, lieferte natives close
+//      denselben Wert - wir gehen aber generell ueber request.security, damit
+//      es auf allen Zeiteinheiten korrekt ist.
 // =============================================================================
 
 indicator("Startzeitpunkt-Marker", overlay = true)
