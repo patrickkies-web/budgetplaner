@@ -14,39 +14,29 @@
 //     - BEARISCHER Wechsel: ROT folgt auf BLAU
 //     - BULLISCHER Wechsel: BLAU folgt auf ROT
 //
-//   Pro Wechsel:
-//     1) Farbwechsel finden
-//     2) das relevante EXTREM der beiden Kerzen bestimmen:
-//          - bearischer Wechsel -> das HOEHERE High der beiden Kerzen
-//          - bullischer Wechsel -> das TIEFERE  Low  der beiden Kerzen
-//     3) an diesem Extrem eine WAAGERECHTE Linie zeichnen, die 4 Kerzen
-//        (= 4 x 2H) nach rechts laeuft. Jede Linie steht fuer sich.
+//   EXTREM = "highest/lowest out of four":
+//     Es zaehlen die beiden Wechsel-Kerzen PLUS je eine Kerze LINKS und RECHTS
+//     daneben (= 4 Kerzen). Fenster:  [ links , A , B , rechts ]
+//       - A = erste Wechsel-Kerze, B = zweite Wechsel-Kerze
+//       - bearischer Wechsel (A blau, B rot)  -> hoechstes High der 4 Kerzen
+//       - bullischer Wechsel (A rot, B blau)  -> tiefstes  Low  der 4 Kerzen
+//     Hinweis: Weil die Kerze RECHTS mitzaehlt, wird erst gezeichnet, wenn
+//     diese abgeschlossen ist -> eine 2H-Kerze zusaetzliche Verzoegerung.
 //
-// Status: "ruhend" - diese Datei ist nicht mit der Webapp/dem Build verbunden.
-//         Sie dient als Vorlage, die bei Bedarf in TradingView eingefuegt wird.
+//   Pro Wechsel: waagerechte Linie am Extrem, 4 Kerzen (4 x 2H) nach rechts.
+//
+// Status: "ruhend" - nicht mit Webapp/Build verbunden. Vorlage fuer TradingView.
 //
 // -----------------------------------------------------------------------------
 // ARCHITEKTUR / VERBINDLICHE SPEZIFIKATION  (Stand: 2026-06-26)
 // -----------------------------------------------------------------------------
-//   1) STARTZEITPUNKT
-//      Der Nutzer waehlt per Chart-Klick (input.time, confirm=true) den Punkt,
-//      ab dem ueberhaupt ausgewertet wird. Vor dem Startzeitpunkt: nichts.
+//   1) STARTZEITPUNKT per Chart-Klick (input.time, confirm=true). Davor: nichts.
+//   2) GRUND-RECHEN-ZEITEINHEIT = 2H (Heikin Ashi), unabhaengig von der Chart-TF.
+//   3) VISUALISIERUNG zeit-basiert (xloc.bar_time) -> korrekt auf jeder TF.
 //
-//   2) GRUND-RECHEN-ZEITEINHEIT = 2H  (Heikin Ashi)
-//      Die gesamte Logik wird AUSSCHLIESSLICH auf dem 2H-HA-Frame gerechnet,
-//      ab dem Startzeitpunkt - unabhaengig von der Chart-Zeiteinheit.
-//
-//   3) VISUALISIERUNG AUF ALLEN ZEITEINHEITEN
-//      Zeit-basiert gezeichnet (xloc.bar_time) -> korrekte Position auf jeder TF.
-//
-//   WICHTIG ZUR BERECHNUNG (Lehre aus einem Bug):
-//      Der History-Operator [1] INNERHALB von request.security ist mit
-//      lookahead_off NICHT zuverlaessig (kann sich auf dieselbe statt auf die
-//      vorherige Kerze aufloesen -> Extrem fiel faelschlich auf das High der
-//      roten Kerze zusammen). Deshalb holen wir per request.security nur die
-//      ROHEN 2H-Werte und merken uns die letzten beiden ABGESCHLOSSENEN
-//      2H-Kerzen explizit in var-Variablen auf der Chart-Seite. So ist
-//      "vorherige Kerze" eindeutig und das Extrem korrekt.
+//   WICHTIG: Der History-Operator [1] INNERHALB von request.security ist mit
+//   lookahead_off NICHT zuverlaessig. Deshalb holen wir nur ROHE 2H-Werte und
+//   fuehren die letzten ABGESCHLOSSENEN 2H-Kerzen explizit chart-seitig mit.
 //
 //   BEKANNTE GRENZE: Voll praezise auf Chart-Zeiteinheiten <= 2H.
 // =============================================================================
@@ -82,70 +72,75 @@ ha2h = ticker.heikinashi(syminfo.tickerid)
      gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
 
 // -----------------------------------------------------------------------------
-// Letzte beide ABGESCHLOSSENEN 2H-Kerzen explizit mitfuehren
-//   last* = die zuletzt abgeschlossene 2H-Kerze
-//   prev* = die 2H-Kerze davor
+// Rollendes Fenster der letzten 4 ABGESCHLOSSENEN 2H-Kerzen
+//   Index 0 = aelteste (links), 1 = A, 2 = B, 3 = neueste (rechts)
 // -----------------------------------------------------------------------------
-var float lastOpen  = na
-var float lastClose = na
-var float lastHigh  = na
-var float lastLow   = na
-var int   lastTime  = na
-var float prevOpen  = na
-var float prevClose = na
-var float prevHigh  = na
-var float prevLow   = na
-var int   prevTime  = na
+var array<float> oArr = array.new<float>()
+var array<float> cArr = array.new<float>()
+var array<float> hArr = array.new<float>()
+var array<float> lArr = array.new<float>()
+var array<int>   tArr = array.new<int>()
 
-// Erste Chart-Kerze einer neuen 2H-Kerze -> die vorherige Chart-Kerze war die
-// letzte Teil-Kerze der gerade ABGESCHLOSSENEN 2H-Kerze. Deren Endwerte holen
-// wir per [1] auf CHART-Ebene (zuverlaessig, anders als [1] in der security).
+// Erste Chart-Kerze einer neuen 2H-Kerze -> vorige 2H-Kerze gerade abgeschlossen.
+// Deren Endwerte per [1] auf CHART-Ebene (zuverlaessig).
 isNew2H = not na(t2) and (na(t2[1]) or t2 != t2[1])
 
 ms2H = 120 * 60 * 1000  // Millisekunden je 2H-Kerze
 
-if isNew2H
-    // Schieberegister: bisher "last" wird zu "prev"
-    prevOpen  := lastOpen
-    prevClose := lastClose
-    prevHigh  := lastHigh
-    prevLow   := lastLow
-    prevTime  := lastTime
-    // soeben abgeschlossene 2H-Kerze uebernehmen (Endwerte = Wert der letzten Teil-Kerze)
-    lastOpen  := o2[1]
-    lastClose := c2[1]
-    lastHigh  := h2[1]
-    lastLow   := l2[1]
-    lastTime  := t2[1]
+if isNew2H and not na(o2[1])
+    array.push(oArr, o2[1])
+    array.push(cArr, c2[1])
+    array.push(hArr, h2[1])
+    array.push(lArr, l2[1])
+    array.push(tArr, t2[1])
+    if array.size(oArr) > 4
+        array.shift(oArr)
+        array.shift(cArr)
+        array.shift(hArr)
+        array.shift(lArr)
+        array.shift(tArr)
 
-    // Farben der beiden abgeschlossenen Kerzen bestimmen
-    lastRed  = not na(lastClose) and lastClose < lastOpen
-    lastBlue = not na(lastClose) and lastClose > lastOpen
-    prevRed  = not na(prevClose) and prevClose < prevOpen
-    prevBlue = not na(prevClose) and prevClose > prevOpen
+    if array.size(oArr) == 4
+        // Wechsel-Kerzen sind A (Index 1) und B (Index 2); B ist die Wechselkerze
+        aOpen  = array.get(oArr, 1)
+        aClose = array.get(cArr, 1)
+        bOpen  = array.get(oArr, 2)
+        bClose = array.get(cArr, 2)
+        bTime  = array.get(tArr, 2)
 
-    canEval = not na(prevTime) and not na(lastTime) and lastTime >= startTime
+        aBlue = aClose > aOpen
+        aRed  = aClose < aOpen
+        bBlue = bClose > bOpen
+        bRed  = bClose < bOpen
 
-    // BEARISCHER Wechsel: ROT folgt auf BLAU -> Extrem = hoeheres High beider Kerzen
-    if canEval and lastRed and prevBlue
-        ext = math.max(lastHigh, prevHigh)
-        line.new(x1 = lastTime, y1 = ext, x2 = lastTime + lineLenBars * ms2H, y2 = ext,
-                  xloc = xloc.bar_time, color = colBear, width = lineW)
-        if showDebug
-            label.new(lastTime, ext, xloc = xloc.bar_time, yloc = yloc.price,
-                  text = "BEAR ext=" + str.tostring(ext, format.mintick) +
-                         "\nrot H=" + str.tostring(lastHigh, format.mintick) +
-                         "  blau H=" + str.tostring(prevHigh, format.mintick),
-                  style = label.style_label_down, color = colBear, textcolor = color.white, size = size.small)
+        // Extrem ueber alle 4 Kerzen (links, A, B, rechts)
+        hiOfFour = math.max(math.max(array.get(hArr, 0), array.get(hArr, 1)), math.max(array.get(hArr, 2), array.get(hArr, 3)))
+        loOfFour = math.min(math.min(array.get(lArr, 0), array.get(lArr, 1)), math.min(array.get(lArr, 2), array.get(lArr, 3)))
 
-    // BULLISCHER Wechsel: BLAU folgt auf ROT -> Extrem = tieferes Low beider Kerzen
-    if canEval and lastBlue and prevRed
-        ext = math.min(lastLow, prevLow)
-        line.new(x1 = lastTime, y1 = ext, x2 = lastTime + lineLenBars * ms2H, y2 = ext,
-                  xloc = xloc.bar_time, color = colBull, width = lineW)
-        if showDebug
-            label.new(lastTime, ext, xloc = xloc.bar_time, yloc = yloc.price,
-                  text = "BULL ext=" + str.tostring(ext, format.mintick) +
-                         "\nblau L=" + str.tostring(lastLow, format.mintick) +
-                         "  rot L=" + str.tostring(prevLow, format.mintick),
-                  style = label.style_label_up, color = colBull, textcolor = color.white, size = size.small)
+        canEval = not na(bTime) and bTime >= startTime
+
+        // BEARISCHER Wechsel: A blau, B rot -> hoechstes High der 4 Kerzen
+        if canEval and aBlue and bRed
+            line.new(x1 = bTime, y1 = hiOfFour, x2 = bTime + lineLenBars * ms2H, y2 = hiOfFour,
+                      xloc = xloc.bar_time, color = colBear, width = lineW)
+            if showDebug
+                label.new(bTime, hiOfFour, xloc = xloc.bar_time, yloc = yloc.price,
+                      text = "BEAR hi4=" + str.tostring(hiOfFour, format.mintick) +
+                             "\nL=" + str.tostring(array.get(hArr, 0), format.mintick) +
+                             " A=" + str.tostring(array.get(hArr, 1), format.mintick) +
+                             " B=" + str.tostring(array.get(hArr, 2), format.mintick) +
+                             " R=" + str.tostring(array.get(hArr, 3), format.mintick),
+                      style = label.style_label_down, color = colBear, textcolor = color.white, size = size.small)
+
+        // BULLISCHER Wechsel: A rot, B blau -> tiefstes Low der 4 Kerzen
+        if canEval and aRed and bBlue
+            line.new(x1 = bTime, y1 = loOfFour, x2 = bTime + lineLenBars * ms2H, y2 = loOfFour,
+                      xloc = xloc.bar_time, color = colBull, width = lineW)
+            if showDebug
+                label.new(bTime, loOfFour, xloc = xloc.bar_time, yloc = yloc.price,
+                      text = "BULL lo4=" + str.tostring(loOfFour, format.mintick) +
+                             "\nL=" + str.tostring(array.get(lArr, 0), format.mintick) +
+                             " A=" + str.tostring(array.get(lArr, 1), format.mintick) +
+                             " B=" + str.tostring(array.get(lArr, 2), format.mintick) +
+                             " R=" + str.tostring(array.get(lArr, 3), format.mintick),
+                      style = label.style_label_up, color = colBull, textcolor = color.white, size = size.small)
