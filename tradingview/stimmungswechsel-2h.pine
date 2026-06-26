@@ -1,0 +1,113 @@
+//@version=6
+// =============================================================================
+// Stimmungswechsel-Indikator  (Schritt 1: Farbwechsel + Extrem)
+// =============================================================================
+// Zweck dieser Datei:
+//   Baustein 2 des Indikators. Es wird ab einem frei waehlbaren Startzeitpunkt
+//   auf dem 2H-Heikin-Ashi-Frame nach STIMMUNGSWECHSELN gesucht.
+//
+//   Begriffe (Nutzer-Sprech):
+//     - BLAUE Kerze  = bullish (close > open)
+//     - ROTE  Kerze  = bearish (close < open)
+//
+//   Stimmungswechsel = Farbwechsel zweier aufeinanderfolgender 2H-Kerzen:
+//     - BEARISCHER Wechsel: ROT folgt auf BLAU
+//     - BULLISCHER Wechsel: BLAU folgt auf ROT
+//
+//   Pro Wechsel:
+//     1) Farbwechsel finden
+//     2) das relevante EXTREM der beiden Kerzen bestimmen:
+//          - bearischer Wechsel -> das HOEHERE High der beiden Kerzen
+//          - bullischer Wechsel -> das TIEFERE  Low  der beiden Kerzen
+//     3) an diesem Extrem eine WAAGERECHTE Linie zeichnen, die 4 Kerzen
+//        (= 4 x 2H) nach rechts laeuft. Jede Linie steht fuer sich.
+//
+// Status: "ruhend" - diese Datei ist nicht mit der Webapp/dem Build verbunden.
+//         Sie dient als Vorlage, die bei Bedarf in TradingView eingefuegt wird.
+//
+// -----------------------------------------------------------------------------
+// ARCHITEKTUR / VERBINDLICHE SPEZIFIKATION  (Stand: 2026-06-26)
+// -----------------------------------------------------------------------------
+//   1) STARTZEITPUNKT
+//      Der Nutzer waehlt per Chart-Klick (input.time, confirm=true) den Punkt,
+//      ab dem ueberhaupt ausgewertet wird. Vor dem Startzeitpunkt: nichts.
+//
+//   2) GRUND-RECHEN-ZEITEINHEIT = 2H  (Heikin Ashi)
+//      Die gesamte Logik (Kerzen-Abfolge / Rhythmus / Trend) wird AUSSCHLIESSLICH
+//      auf dem 2-Stunden-Heikin-Ashi-Frame gerechnet - ab dem Startzeitpunkt.
+//      2H ist die feste Grundzeiteinheit, unabhaengig davon, welche Zeiteinheit
+//      der Chart gerade anzeigt.
+//
+//   3) VISUALISIERUNG AUF ALLEN ZEITEINHEITEN
+//      Die visuellen Elemente werden zeit-basiert gezeichnet (xloc.bar_time),
+//      damit sie auf JEDER Chart-Zeiteinheit an der richtigen Stelle stehen.
+//
+//   TECHNISCHE FOLGE (wichtig!):
+//      Weil der Chart NICHT zwingend auf 2H steht, duerfen wir NICHT das native
+//      open/high/low/close verwenden. Die 2H-Heikin-Ashi-Werte werden EXPLIZIT
+//      via request.security(ticker.heikinashi(...), "120", ...) angefordert.
+//      Repaint-Schutz: lookahead_off + Auswertung erst beim Wechsel auf den
+//      naechsten 2H-Bar (also nur fuer bereits ABGESCHLOSSENE 2H-Kerzen).
+//
+//   BEKANNTE GRENZE (Stand jetzt):
+//      Voll praezise auf Chart-Zeiteinheiten <= 2H. Auf Chart-TFs GROESSER als
+//      2H liefert request.security pro Chart-Bar nur EINEN 2H-Wert, d. h. nicht
+//      jeder 2H-Wechsel ist dort sichtbar. Feinschliff dafuer kommt spaeter.
+// =============================================================================
+
+indicator("Stimmungswechsel 2H (HA)", overlay = true, max_lines_count = 500, max_labels_count = 500)
+
+// -----------------------------------------------------------------------------
+// Eingaben
+// -----------------------------------------------------------------------------
+// Startzeitpunkt: Kalender + Uhrzeit im Dialog; confirm=true -> erst auf den
+// Chart klicken beim Hinzufuegen.
+startTime = input.time(timestamp("2024-01-01 00:00 +0000"), "Startzeitpunkt", confirm = true)
+
+showStartMarker = input.bool(true,  "Startpunkt markieren",                 group = "Optik")
+lineLenBars     = input.int(4,      "Linienlaenge (in 2H-Kerzen)", minval = 1, group = "Optik")
+lineW           = input.int(2,      "Linienstaerke",      minval = 1, maxval = 5, group = "Optik")
+colBull         = input.color(#2962ff, "Farbe bullischer Wechsel (blau)",   group = "Optik")
+colBear         = input.color(#d50000, "Farbe bearischer Wechsel (rot)",    group = "Optik")
+
+// -----------------------------------------------------------------------------
+// Startpunkt-Marker (auf der jeweiligen Chart-Zeiteinheit)
+// -----------------------------------------------------------------------------
+isStartBar = time >= startTime and time[1] < startTime
+if showStartMarker and isStartBar
+    line.new(bar_index, low, bar_index, high, extend = extend.both, color = color.new(color.orange, 0), width = 1)
+    label.new(bar_index, high, "Start", style = label.style_label_down, color = color.orange, textcolor = color.white, yloc = yloc.abovebar)
+
+// -----------------------------------------------------------------------------
+// 2H-Heikin-Ashi auswerten
+// -----------------------------------------------------------------------------
+// Alle Ausdruecke werden im 2H-HA-Kontext berechnet -> open/high/low/close sind
+// dort die 2H-HA-Werte, und [1] meint die VORHERIGE 2H-Kerze.
+ha2h = ticker.heikinashi(syminfo.tickerid)
+
+[bearChange, bullChange, bearExtreme, bullExtreme, t2H] = request.security(ha2h, "120",
+     [ (close < open) and (close[1] > open[1]),   // bearisch: ROT folgt auf BLAU
+       (close > open) and (close[1] < open[1]),   // bullisch: BLAU folgt auf ROT
+       math.max(high, high[1]),                   // hoeheres High der beiden Kerzen
+       math.min(low,  low[1]),                    // tieferes  Low  der beiden Kerzen
+       time ],
+     gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
+
+// Erste Chart-Kerze einer neuen 2H-Kerze -> die vorige 2H-Kerze ist gerade
+// abgeschlossen. Mit [1] lesen wir deren ENDGUELTIGE Werte (kein Repaint) und
+// feuern so genau einmal pro 2H-Kerze.
+isNew2H = na(t2H[1]) or t2H != t2H[1]
+
+ms2H = 120 * 60 * 1000  // Millisekunden je 2H-Kerze
+
+// Bearischer Stimmungswechsel -> Linie am hoeheren Extrem (High)
+if isNew2H and bearChange[1] and t2H[1] >= startTime
+    line.new(x1 = t2H[1], y1 = bearExtreme[1],
+              x2 = t2H[1] + lineLenBars * ms2H, y2 = bearExtreme[1],
+              xloc = xloc.bar_time, color = colBear, width = lineW)
+
+// Bullischer Stimmungswechsel -> Linie am tieferen Extrem (Low)
+if isNew2H and bullChange[1] and t2H[1] >= startTime
+    line.new(x1 = t2H[1], y1 = bullExtreme[1],
+              x2 = t2H[1] + lineLenBars * ms2H, y2 = bullExtreme[1],
+              xloc = xloc.bar_time, color = colBull, width = lineW)
