@@ -33,26 +33,22 @@
 //      ab dem ueberhaupt ausgewertet wird. Vor dem Startzeitpunkt: nichts.
 //
 //   2) GRUND-RECHEN-ZEITEINHEIT = 2H  (Heikin Ashi)
-//      Die gesamte Logik (Kerzen-Abfolge / Rhythmus / Trend) wird AUSSCHLIESSLICH
-//      auf dem 2-Stunden-Heikin-Ashi-Frame gerechnet - ab dem Startzeitpunkt.
-//      2H ist die feste Grundzeiteinheit, unabhaengig davon, welche Zeiteinheit
-//      der Chart gerade anzeigt.
+//      Die gesamte Logik wird AUSSCHLIESSLICH auf dem 2H-HA-Frame gerechnet,
+//      ab dem Startzeitpunkt - unabhaengig von der Chart-Zeiteinheit.
 //
 //   3) VISUALISIERUNG AUF ALLEN ZEITEINHEITEN
-//      Die visuellen Elemente werden zeit-basiert gezeichnet (xloc.bar_time),
-//      damit sie auf JEDER Chart-Zeiteinheit an der richtigen Stelle stehen.
+//      Zeit-basiert gezeichnet (xloc.bar_time) -> korrekte Position auf jeder TF.
 //
-//   TECHNISCHE FOLGE (wichtig!):
-//      Weil der Chart NICHT zwingend auf 2H steht, duerfen wir NICHT das native
-//      open/high/low/close verwenden. Die 2H-Heikin-Ashi-Werte werden EXPLIZIT
-//      via request.security(ticker.heikinashi(...), "120", ...) angefordert.
-//      Repaint-Schutz: lookahead_off + Auswertung erst beim Wechsel auf den
-//      naechsten 2H-Bar (also nur fuer bereits ABGESCHLOSSENE 2H-Kerzen).
+//   WICHTIG ZUR BERECHNUNG (Lehre aus einem Bug):
+//      Der History-Operator [1] INNERHALB von request.security ist mit
+//      lookahead_off NICHT zuverlaessig (kann sich auf dieselbe statt auf die
+//      vorherige Kerze aufloesen -> Extrem fiel faelschlich auf das High der
+//      roten Kerze zusammen). Deshalb holen wir per request.security nur die
+//      ROHEN 2H-Werte und merken uns die letzten beiden ABGESCHLOSSENEN
+//      2H-Kerzen explizit in var-Variablen auf der Chart-Seite. So ist
+//      "vorherige Kerze" eindeutig und das Extrem korrekt.
 //
-//   BEKANNTE GRENZE (Stand jetzt):
-//      Voll praezise auf Chart-Zeiteinheiten <= 2H. Auf Chart-TFs GROESSER als
-//      2H liefert request.security pro Chart-Bar nur EINEN 2H-Wert, d. h. nicht
-//      jeder 2H-Wechsel ist dort sichtbar. Feinschliff dafuer kommt spaeter.
+//   BEKANNTE GRENZE: Voll praezise auf Chart-Zeiteinheiten <= 2H.
 // =============================================================================
 
 indicator("Stimmungswechsel 2H (HA)", overlay = true, max_lines_count = 500, max_labels_count = 500)
@@ -60,8 +56,6 @@ indicator("Stimmungswechsel 2H (HA)", overlay = true, max_lines_count = 500, max
 // -----------------------------------------------------------------------------
 // Eingaben
 // -----------------------------------------------------------------------------
-// Startzeitpunkt: Kalender + Uhrzeit im Dialog; confirm=true -> erst auf den
-// Chart klicken beim Hinzufuegen.
 startTime = input.time(timestamp("2024-01-01 00:00 +0000"), "Startzeitpunkt", confirm = true)
 
 showStartMarker = input.bool(true,  "Startpunkt markieren",                 group = "Optik")
@@ -69,6 +63,7 @@ lineLenBars     = input.int(4,      "Linienlaenge (in 2H-Kerzen)", minval = 1, g
 lineW           = input.int(2,      "Linienstaerke",      minval = 1, maxval = 5, group = "Optik")
 colBull         = input.color(#2962ff, "Farbe bullischer Wechsel (blau)",   group = "Optik")
 colBear         = input.color(#d50000, "Farbe bearischer Wechsel (rot)",    group = "Optik")
+showDebug       = input.bool(false, "Debug-Label (Extreme je Wechsel)",     group = "Debug")
 
 // -----------------------------------------------------------------------------
 // Startpunkt-Marker (auf der jeweiligen Chart-Zeiteinheit)
@@ -79,35 +74,78 @@ if showStartMarker and isStartBar
     label.new(bar_index, high, "Start", style = label.style_label_down, color = color.orange, textcolor = color.white, yloc = yloc.abovebar)
 
 // -----------------------------------------------------------------------------
-// 2H-Heikin-Ashi auswerten
+// Rohe 2H-Heikin-Ashi-Werte holen (NUR aktuelle Bar-Werte, kein [1] in security!)
 // -----------------------------------------------------------------------------
-// Alle Ausdruecke werden im 2H-HA-Kontext berechnet -> open/high/low/close sind
-// dort die 2H-HA-Werte, und [1] meint die VORHERIGE 2H-Kerze.
 ha2h = ticker.heikinashi(syminfo.tickerid)
-
-[bearChange, bullChange, bearExtreme, bullExtreme, t2H] = request.security(ha2h, "120",
-     [ (close < open) and (close[1] > open[1]),   // bearisch: ROT folgt auf BLAU
-       (close > open) and (close[1] < open[1]),   // bullisch: BLAU folgt auf ROT
-       math.max(high, high[1]),                   // hoeheres High der beiden Kerzen
-       math.min(low,  low[1]),                    // tieferes  Low  der beiden Kerzen
-       time ],
+[o2, c2, h2, l2, t2] = request.security(ha2h, "120",
+     [open, close, high, low, time],
      gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)
 
-// Erste Chart-Kerze einer neuen 2H-Kerze -> die vorige 2H-Kerze ist gerade
-// abgeschlossen. Mit [1] lesen wir deren ENDGUELTIGE Werte (kein Repaint) und
-// feuern so genau einmal pro 2H-Kerze.
-isNew2H = na(t2H[1]) or t2H != t2H[1]
+// -----------------------------------------------------------------------------
+// Letzte beide ABGESCHLOSSENEN 2H-Kerzen explizit mitfuehren
+//   last* = die zuletzt abgeschlossene 2H-Kerze
+//   prev* = die 2H-Kerze davor
+// -----------------------------------------------------------------------------
+var float lastOpen  = na
+var float lastClose = na
+var float lastHigh  = na
+var float lastLow   = na
+var int   lastTime  = na
+var float prevOpen  = na
+var float prevClose = na
+var float prevHigh  = na
+var float prevLow   = na
+var int   prevTime  = na
+
+// Erste Chart-Kerze einer neuen 2H-Kerze -> die vorherige Chart-Kerze war die
+// letzte Teil-Kerze der gerade ABGESCHLOSSENEN 2H-Kerze. Deren Endwerte holen
+// wir per [1] auf CHART-Ebene (zuverlaessig, anders als [1] in der security).
+isNew2H = not na(t2) and (na(t2[1]) or t2 != t2[1])
 
 ms2H = 120 * 60 * 1000  // Millisekunden je 2H-Kerze
 
-// Bearischer Stimmungswechsel -> Linie am hoeheren Extrem (High)
-if isNew2H and bearChange[1] and t2H[1] >= startTime
-    line.new(x1 = t2H[1], y1 = bearExtreme[1],
-              x2 = t2H[1] + lineLenBars * ms2H, y2 = bearExtreme[1],
-              xloc = xloc.bar_time, color = colBear, width = lineW)
+if isNew2H
+    // Schieberegister: bisher "last" wird zu "prev"
+    prevOpen  := lastOpen
+    prevClose := lastClose
+    prevHigh  := lastHigh
+    prevLow   := lastLow
+    prevTime  := lastTime
+    // soeben abgeschlossene 2H-Kerze uebernehmen (Endwerte = Wert der letzten Teil-Kerze)
+    lastOpen  := o2[1]
+    lastClose := c2[1]
+    lastHigh  := h2[1]
+    lastLow   := l2[1]
+    lastTime  := t2[1]
 
-// Bullischer Stimmungswechsel -> Linie am tieferen Extrem (Low)
-if isNew2H and bullChange[1] and t2H[1] >= startTime
-    line.new(x1 = t2H[1], y1 = bullExtreme[1],
-              x2 = t2H[1] + lineLenBars * ms2H, y2 = bullExtreme[1],
-              xloc = xloc.bar_time, color = colBull, width = lineW)
+    // Farben der beiden abgeschlossenen Kerzen bestimmen
+    lastRed  = not na(lastClose) and lastClose < lastOpen
+    lastBlue = not na(lastClose) and lastClose > lastOpen
+    prevRed  = not na(prevClose) and prevClose < prevOpen
+    prevBlue = not na(prevClose) and prevClose > prevOpen
+
+    canEval = not na(prevTime) and not na(lastTime) and lastTime >= startTime
+
+    // BEARISCHER Wechsel: ROT folgt auf BLAU -> Extrem = hoeheres High beider Kerzen
+    if canEval and lastRed and prevBlue
+        ext = math.max(lastHigh, prevHigh)
+        line.new(x1 = lastTime, y1 = ext, x2 = lastTime + lineLenBars * ms2H, y2 = ext,
+                  xloc = xloc.bar_time, color = colBear, width = lineW)
+        if showDebug
+            label.new(lastTime, ext, xloc = xloc.bar_time, yloc = yloc.price,
+                  text = "BEAR ext=" + str.tostring(ext, format.mintick) +
+                         "\nrot H=" + str.tostring(lastHigh, format.mintick) +
+                         "  blau H=" + str.tostring(prevHigh, format.mintick),
+                  style = label.style_label_down, color = colBear, textcolor = color.white, size = size.small)
+
+    // BULLISCHER Wechsel: BLAU folgt auf ROT -> Extrem = tieferes Low beider Kerzen
+    if canEval and lastBlue and prevRed
+        ext = math.min(lastLow, prevLow)
+        line.new(x1 = lastTime, y1 = ext, x2 = lastTime + lineLenBars * ms2H, y2 = ext,
+                  xloc = xloc.bar_time, color = colBull, width = lineW)
+        if showDebug
+            label.new(lastTime, ext, xloc = xloc.bar_time, yloc = yloc.price,
+                  text = "BULL ext=" + str.tostring(ext, format.mintick) +
+                         "\nblau L=" + str.tostring(lastLow, format.mintick) +
+                         "  rot L=" + str.tostring(prevLow, format.mintick),
+                  style = label.style_label_up, color = colBull, textcolor = color.white, size = size.small)
