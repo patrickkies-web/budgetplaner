@@ -274,6 +274,11 @@ export default function Style() {
 .bt-dot:hover{background:var(--faint)}
 .bt-dot.is-active{background:var(--ink);width:18px}
 
+/* category payments */
+.bt-catpay{margin-top:16px;border-top:1px solid var(--line-soft);padding-top:12px}
+.bt-catpay-head{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.bt-catpay-title{font-size:13.5px;font-weight:600}
+
 /* uncategorized */
 .bt-nocat{margin-top:16px;border-top:1px solid var(--line-soft);padding-top:14px}
 .bt-nocat-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}

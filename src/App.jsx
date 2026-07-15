@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { CATEGORIES, DEFAULT_STATE } from "./constants";
 import { eur, eur0, uid, todayISO, fmtDate, download } from "./utils/format";
-import { attachGet, attachSet, attachDel, openAttachment } from "./utils/attachments";
+import { attachGet, attachSet, attachDel } from "./utils/attachments";
 import { loadState, saveState } from "./utils/persistence";
 import Meter from "./components/Meter";
 import Legend from "./components/Legend";
 import Stat from "./components/Stat";
 import Settings from "./components/Settings";
 import ExpenseForm from "./components/ExpenseForm";
+import ExpenseRow from "./components/ExpenseRow";
 import StatsPanel from "./components/StatsPanel";
 import Style from "./components/Style";
 
@@ -348,7 +349,11 @@ export default function App() {
         <StatsPanel
           expenses={state.expenses}
           categories={state.categories || CATEGORIES}
+          credits={state.credits}
           onAssignCategory={(id, category) => updateExpense(id, { category })}
+          onUpdateExpense={updateExpense}
+          onDeleteExpense={deleteExpense}
+          onAddCategory={addCategory}
         />
 
         <ExpenseForm
@@ -370,107 +375,22 @@ export default function App() {
             </div>
           ) : (
             <ul className="bt-rows">
-              {sortedExpenses.map((e) => {
-                const isPriv = e.creditId === "priv";
-                const credit = state.credits.find((c) => c.id === e.creditId);
-                const srcName = isPriv ? "Privatkonto" : credit ? credit.name : "—";
-                const payAcc = e.auszahlKonto || e.creditId;
-                const payName =
-                  payAcc === "priv"
-                    ? "Privatkonto"
-                    : state.credits.find((c) => c.id === payAcc)?.name || "Konto";
-                const refund = e.foerderfaehig
-                  ? e.amount * ((e.foerderPercent || 0) / 100)
-                  : 0;
-                const isOpen = expandedId === e.id;
-                const toggle = () => setExpandedId(isOpen ? null : e.id);
-                return (
-                  <li className={"bt-row" + (isOpen ? " is-open" : "")} key={e.id}>
-                    <div
-                      className="bt-row-line"
-                      role="button"
-                      tabIndex={0}
-                      aria-expanded={isOpen}
-                      onClick={toggle}
-                      onKeyDown={(ev) => {
-                        if (ev.key === "Enter" || ev.key === " ") {
-                          ev.preventDefault();
-                          toggle();
-                        }
-                      }}
-                    >
-                      <div className="bt-row-main">
-                        <div className="bt-row-top">
-                          <span className="bt-row-desc">
-                            {e.desc || "Ohne Bezeichnung"}
-                          </span>
-                          <span className="bt-row-amt">{eur(e.amount)}</span>
-                        </div>
-                        <div className="bt-row-meta">
-                          <span className="bt-date">{fmtDate(e.date)}</span>
-                          {e.category && <span className="bt-chip is-cat">{e.category}</span>}
-                          <span className={"bt-chip" + (isPriv ? " is-priv" : "")}>{srcName}</span>
-                          {e.foerderfaehig ? (
-                            <>
-                              <span className="bt-chip is-acc">
-                                {e.foerderPercent || 0}% · {eur0(refund)} zurück
-                              </span>
-                              <span className={"bt-chip " + (e.ausgezahlt ? "is-good" : "is-open")}>
-                                {e.ausgezahlt ? `ausgezahlt · ${payName}` : "offen"}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="bt-chip is-mut">nicht förderfähig</span>
-                          )}
-                          {(e.attachments || []).map((a) => (
-                            <button
-                              key={a.id}
-                              className="bt-chip is-file"
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                openAttachment(a);
-                              }}
-                              title={a.name}
-                            >
-                              {a.type && a.type.startsWith("image/") ? "🖼" : "📄"}{" "}
-                              {a.name && a.name.length > 16 ? a.name.slice(0, 14) + "…" : a.name || "Beleg"}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="bt-row-actions">
-                        <span className="bt-chevron" aria-hidden="true">▾</span>
-                        <button
-                          className="bt-del"
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            deleteExpense(e.id);
-                          }}
-                          aria-label="Ausgabe löschen"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                    {isOpen && (
-                      <div className="bt-row-editor">
-                        <ExpenseForm
-                          inline
-                          credits={state.credits}
-                          categories={state.categories || CATEGORIES}
-                          initial={e}
-                          onUpdate={(changes) => {
-                            updateExpense(e.id, changes);
-                            setExpandedId(null);
-                          }}
-                          onCancelEdit={() => setExpandedId(null)}
-                          onAddCategory={addCategory}
-                        />
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
+              {sortedExpenses.map((e) => (
+                <ExpenseRow
+                  key={e.id}
+                  expense={e}
+                  credits={state.credits}
+                  categories={state.categories || CATEGORIES}
+                  expanded={expandedId === e.id}
+                  onToggle={() => setExpandedId(expandedId === e.id ? null : e.id)}
+                  onUpdate={(changes) => {
+                    updateExpense(e.id, changes);
+                    setExpandedId(null);
+                  }}
+                  onDelete={() => deleteExpense(e.id)}
+                  onAddCategory={addCategory}
+                />
+              ))}
             </ul>
           )}
         </section>
