@@ -33,7 +33,11 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
 
   useEffect(() => {
     if (!initial) return;
-    setAmount(String(initial.amount || ""));
+    setAmount(
+      initial.amount || initial.amount === 0
+        ? String(initial.amount).replace(".", ",")
+        : ""
+    );
     setDesc(initial.desc || "");
     setDate(initial.date || todayISO());
     setCreditId(initial.creditId || credits[0]?.id || "k1");
