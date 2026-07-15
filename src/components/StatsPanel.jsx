@@ -1,10 +1,20 @@
 import React, { useMemo, useRef, useState } from "react";
 import { eur, eur0, fmtDate } from "../utils/format";
 import Meter from "./Meter";
+import ExpenseRow from "./ExpenseRow";
 
-export default function StatsPanel({ expenses, categories, onAssignCategory }) {
+export default function StatsPanel({
+  expenses,
+  categories,
+  credits,
+  onAssignCategory,
+  onUpdateExpense,
+  onDeleteExpense,
+  onAddCategory,
+}) {
   const scrollerRef = useRef(null);
   const [active, setActive] = useState(0);
+  const [expandedId, setExpandedId] = useState(null);
   const GAP = 12;
 
   const stats = useMemo(() => {
@@ -55,6 +65,15 @@ export default function StatsPanel({ expenses, categories, onAssignCategory }) {
     if (!el) return;
     el.scrollTo({ left: i * (el.clientWidth + GAP), behavior: "smooth" });
   };
+
+  const activeIdx = Math.max(0, Math.min(active, stats.cats.length - 1));
+  const activeCat = stats.cats[activeIdx] || null;
+  const activeExpenses = useMemo(() => {
+    if (!activeCat) return [];
+    return expenses
+      .filter((e) => e.category === activeCat.name)
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }, [expenses, activeCat]);
 
   return (
     <section className="bt-statspanel">
@@ -130,12 +149,41 @@ export default function StatsPanel({ expenses, categories, onAssignCategory }) {
               {stats.cats.map((c, i) => (
                 <button
                   key={c.name}
-                  className={"bt-dot" + (i === active ? " is-active" : "")}
+                  className={"bt-dot" + (i === activeIdx ? " is-active" : "")}
                   onClick={() => goTo(i)}
                   aria-label={c.name}
                   title={c.name}
                 />
               ))}
+            </div>
+          )}
+
+          {activeCat && (
+            <div className="bt-catpay">
+              <div className="bt-catpay-head">
+                <span className="bt-catpay-title">
+                  Zahlungen in „{activeCat.name}“
+                </span>
+                <span className="bt-count">{activeExpenses.length}</span>
+              </div>
+              <ul className="bt-rows">
+                {activeExpenses.map((e) => (
+                  <ExpenseRow
+                    key={e.id}
+                    expense={e}
+                    credits={credits}
+                    categories={categories}
+                    expanded={expandedId === e.id}
+                    onToggle={() => setExpandedId(expandedId === e.id ? null : e.id)}
+                    onUpdate={(changes) => {
+                      onUpdateExpense(e.id, changes);
+                      setExpandedId(null);
+                    }}
+                    onDelete={() => onDeleteExpense(e.id)}
+                    onAddCategory={onAddCategory}
+                  />
+                ))}
+              </ul>
             </div>
           )}
         </>
