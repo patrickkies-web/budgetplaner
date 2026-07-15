@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { parseNum, clamp, eur, todayISO } from "../utils/format";
 import { processFile, attachSet, attachDel } from "../utils/attachments";
 
-export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCancelEdit, initial, onAddCategory }) {
+export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCancelEdit, initial, onAddCategory, inline = false }) {
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
   const [date, setDate] = useState(todayISO());
@@ -43,7 +43,9 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
     setPayTo(initial.auszahlKonto || null);
     setCategory(initial.category || "");
     setFiles((initial.attachments || []).map((a) => ({ ...a, isExisting: true })));
-    sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!inline) {
+      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }, [initial]);
 
   const confirmAddCat = () => {
@@ -102,14 +104,23 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
 
   const handleCancel = () => {
     resetForm();
-    onCancelEdit();
+    if (onCancelEdit) onCancelEdit();
   };
 
   const isEditMode = !!initial;
 
   return (
-    <section className={"bt-form" + (isEditMode ? " is-editing" : "")} ref={sectionRef}>
-      <h2 className="bt-h2">{isEditMode ? "Ausgabe bearbeiten" : "Neue Ausgabe"}</h2>
+    <section
+      className={
+        "bt-form" +
+        (isEditMode && !inline ? " is-editing" : "") +
+        (inline ? " bt-form-inline" : "")
+      }
+      ref={sectionRef}
+    >
+      {!inline && (
+        <h2 className="bt-h2">{isEditMode ? "Ausgabe bearbeiten" : "Neue Ausgabe"}</h2>
+      )}
 
       <div className="bt-form-grid">
         <div className="bt-field bt-col-amt">

@@ -8,6 +8,7 @@ import Legend from "./components/Legend";
 import Stat from "./components/Stat";
 import Settings from "./components/Settings";
 import ExpenseForm from "./components/ExpenseForm";
+import StatsPanel from "./components/StatsPanel";
 import Style from "./components/Style";
 
 function structuredCloneSafe(obj) {
@@ -17,7 +18,7 @@ function structuredCloneSafe(obj) {
 export default function App() {
   const [state, setState] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [editingExpense, setEditingExpense] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
   const loadedOnce = useRef(false);
 
   useEffect(() => {
@@ -106,6 +107,7 @@ export default function App() {
   const deleteExpense = (id) => {
     const exp = state.expenses.find((e) => e.id === id);
     if (exp && exp.attachments) exp.attachments.forEach((a) => attachDel(a.id));
+    if (expandedId === id) setExpandedId(null);
     update((s) => {
       s.expenses = s.expenses.filter((e) => e.id !== id);
       return s;
@@ -343,16 +345,16 @@ export default function App() {
           </div>
         )}
 
+        <StatsPanel
+          expenses={state.expenses}
+          categories={state.categories || CATEGORIES}
+          onAssignCategory={(id, category) => updateExpense(id, { category })}
+        />
+
         <ExpenseForm
           credits={state.credits}
           categories={state.categories || CATEGORIES}
           onAdd={addExpense}
-          onUpdate={(changes) => {
-            updateExpense(editingExpense.id, changes);
-            setEditingExpense(null);
-          }}
-          onCancelEdit={() => setEditingExpense(null)}
-          initial={editingExpense}
           onAddCategory={addCategory}
         />
 
@@ -380,60 +382,92 @@ export default function App() {
                 const refund = e.foerderfaehig
                   ? e.amount * ((e.foerderPercent || 0) / 100)
                   : 0;
+                const isOpen = expandedId === e.id;
+                const toggle = () => setExpandedId(isOpen ? null : e.id);
                 return (
-                  <li className="bt-row" key={e.id}>
-                    <div className="bt-row-main">
-                      <div className="bt-row-top">
-                        <span className="bt-row-desc">
-                          {e.desc || "Ohne Bezeichnung"}
-                        </span>
-                        <span className="bt-row-amt">{eur(e.amount)}</span>
+                  <li className={"bt-row" + (isOpen ? " is-open" : "")} key={e.id}>
+                    <div
+                      className="bt-row-line"
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isOpen}
+                      onClick={toggle}
+                      onKeyDown={(ev) => {
+                        if (ev.key === "Enter" || ev.key === " ") {
+                          ev.preventDefault();
+                          toggle();
+                        }
+                      }}
+                    >
+                      <div className="bt-row-main">
+                        <div className="bt-row-top">
+                          <span className="bt-row-desc">
+                            {e.desc || "Ohne Bezeichnung"}
+                          </span>
+                          <span className="bt-row-amt">{eur(e.amount)}</span>
+                        </div>
+                        <div className="bt-row-meta">
+                          <span className="bt-date">{fmtDate(e.date)}</span>
+                          {e.category && <span className="bt-chip is-cat">{e.category}</span>}
+                          <span className={"bt-chip" + (isPriv ? " is-priv" : "")}>{srcName}</span>
+                          {e.foerderfaehig ? (
+                            <>
+                              <span className="bt-chip is-acc">
+                                {e.foerderPercent || 0}% · {eur0(refund)} zurück
+                              </span>
+                              <span className={"bt-chip " + (e.ausgezahlt ? "is-good" : "is-open")}>
+                                {e.ausgezahlt ? `ausgezahlt · ${payName}` : "offen"}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="bt-chip is-mut">nicht förderfähig</span>
+                          )}
+                          {(e.attachments || []).map((a) => (
+                            <button
+                              key={a.id}
+                              className="bt-chip is-file"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                openAttachment(a);
+                              }}
+                              title={a.name}
+                            >
+                              {a.type && a.type.startsWith("image/") ? "🖼" : "📄"}{" "}
+                              {a.name && a.name.length > 16 ? a.name.slice(0, 14) + "…" : a.name || "Beleg"}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div className="bt-row-meta">
-                        <span className="bt-date">{fmtDate(e.date)}</span>
-                        {e.category && <span className="bt-chip is-cat">{e.category}</span>}
-                        <span className={"bt-chip" + (isPriv ? " is-priv" : "")}>{srcName}</span>
-                        {e.foerderfaehig ? (
-                          <>
-                            <span className="bt-chip is-acc">
-                              {e.foerderPercent || 0}% · {eur0(refund)} zurück
-                            </span>
-                            <span className={"bt-chip " + (e.ausgezahlt ? "is-good" : "is-open")}>
-                              {e.ausgezahlt ? `ausgezahlt · ${payName}` : "offen"}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="bt-chip is-mut">nicht förderfähig</span>
-                        )}
-                        {(e.attachments || []).map((a) => (
-                          <button
-                            key={a.id}
-                            className="bt-chip is-file"
-                            onClick={() => openAttachment(a)}
-                            title={a.name}
-                          >
-                            {a.type && a.type.startsWith("image/") ? "🖼" : "📄"}{" "}
-                            {a.name && a.name.length > 16 ? a.name.slice(0, 14) + "…" : a.name || "Beleg"}
-                          </button>
-                        ))}
+                      <div className="bt-row-actions">
+                        <span className="bt-chevron" aria-hidden="true">▾</span>
+                        <button
+                          className="bt-del"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            deleteExpense(e.id);
+                          }}
+                          aria-label="Ausgabe löschen"
+                        >
+                          ×
+                        </button>
                       </div>
                     </div>
-                    <div className="bt-row-actions">
-                      <button
-                        className="bt-edit"
-                        onClick={() => setEditingExpense(e)}
-                        aria-label="Ausgabe bearbeiten"
-                      >
-                        ✎
-                      </button>
-                      <button
-                        className="bt-del"
-                        onClick={() => deleteExpense(e.id)}
-                        aria-label="Ausgabe löschen"
-                      >
-                        ×
-                      </button>
-                    </div>
+                    {isOpen && (
+                      <div className="bt-row-editor">
+                        <ExpenseForm
+                          inline
+                          credits={state.credits}
+                          categories={state.categories || CATEGORIES}
+                          initial={e}
+                          onUpdate={(changes) => {
+                            updateExpense(e.id, changes);
+                            setExpandedId(null);
+                          }}
+                          onCancelEdit={() => setExpandedId(null)}
+                          onAddCategory={addCategory}
+                        />
+                      </div>
+                    )}
                   </li>
                 );
               })}
