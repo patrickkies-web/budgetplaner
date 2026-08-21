@@ -175,7 +175,7 @@ export default function FoerderPanel({
                 }}
                 onDelete={() => onDeleteExpense(e.id)}
                 onAddCategory={onAddCategory}
-                statusBar={
+                footer={
                   <div className="bt-statusbar">
                     <span className="bt-statusbar-l">{eur0(refund)} Förderung</span>
                     <div className="bt-statusbar-btns">

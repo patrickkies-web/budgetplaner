@@ -13,8 +13,9 @@ export default function ExpenseRow({
   onUpdate,
   onDelete,
   onAddCategory,
-  statusBar = null,
+  footer = null,
   foerderOnly = false,
+  stepName = null,
 }) {
   const isPriv = e.creditId === "priv";
   const credit = credits.find((c) => c.id === e.creditId);
@@ -50,6 +51,7 @@ export default function ExpenseRow({
           </div>
           <div className="bt-row-meta">
             <span className="bt-date">{fmtDate(e.date)}</span>
+            {stepName && <span className="bt-chip is-step">{stepName}</span>}
             {e.category && <span className="bt-chip is-cat">{e.category}</span>}
             <span className={"bt-chip" + (isPriv ? " is-priv" : "")}>{srcName}</span>
             {e.foerderfaehig ? (
@@ -97,7 +99,7 @@ export default function ExpenseRow({
           </button>
         </div>
       </div>
-      {statusBar && !expanded && statusBar}
+      {footer && !expanded && footer}
       {expanded && (
         <div className="bt-row-editor">
           <ExpenseForm

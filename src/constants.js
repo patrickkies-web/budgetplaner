@@ -56,5 +56,6 @@ export const DEFAULT_STATE = {
     { id: "k2", name: "Kredit 2", total: 0 },
   ],
   categories: [...CATEGORIES],
+  steps: [],
   expenses: [],
 };
