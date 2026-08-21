@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { CATEGORIES, DEFAULT_STATE } from "./constants";
+import { CATEGORIES, DEFAULT_STATE, FOERDER_STATUS } from "./constants";
 import { eur, eur0, uid, todayISO, fmtDate, download } from "./utils/format";
 import { attachGet, attachSet, attachDel } from "./utils/attachments";
 import { loadState, saveState } from "./utils/persistence";
+import { statusOf, statusMeta, refundOf } from "./utils/foerder";
 import Meter from "./components/Meter";
 import Legend from "./components/Legend";
 import Stat from "./components/Stat";
@@ -10,7 +11,14 @@ import Settings from "./components/Settings";
 import ExpenseForm from "./components/ExpenseForm";
 import ExpenseRow from "./components/ExpenseRow";
 import StatsPanel from "./components/StatsPanel";
+import FoerderPanel from "./components/FoerderPanel";
 import Style from "./components/Style";
+
+const TABS = [
+  { key: "uebersicht", label: "Übersicht" },
+  { key: "statistik", label: "Statistiken" },
+  { key: "foerder", label: "Förderungen" },
+];
 
 function structuredCloneSafe(obj) {
   return JSON.parse(JSON.stringify(obj));
@@ -20,6 +28,7 @@ export default function App() {
   const [state, setState] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
+  const [tab, setTab] = useState("uebersicht");
   const loadedOnce = useRef(false);
 
   useEffect(() => {
@@ -37,14 +46,18 @@ export default function App() {
     if (!state) return null;
     const perCredit = {};
     state.credits.forEach((c) => {
-      perCredit[c.id] = { total: c.total || 0, spent: 0, payout: 0 };
+      perCredit[c.id] = { total: c.total || 0, spent: 0, payout: 0, zusage: 0 };
     });
     let spent = 0, refund = 0, creditSpent = 0;
-    let privSpent = 0, privPayout = 0;
-    let refundPaid = 0, creditRefundPaid = 0;
+    let privSpent = 0, privPayout = 0, privZusage = 0;
+    let refundPaid = 0, creditRefundPaid = 0, creditRefundZusage = 0;
+    const refundByStatus = {};
+    FOERDER_STATUS.forEach((s) => {
+      refundByStatus[s.key] = { sum: 0, count: 0 };
+    });
     state.expenses.forEach((e) => {
       const amt = e.amount || 0;
-      const r = e.foerderfaehig ? amt * ((e.foerderPercent || 0) / 100) : 0;
+      const r = refundOf(e);
       spent += amt;
       refund += r;
       if (e.creditId === "priv") privSpent += amt;
@@ -52,19 +65,29 @@ export default function App() {
         creditSpent += amt;
         if (perCredit[e.creditId]) perCredit[e.creditId].spent += amt;
       }
-      if (e.foerderfaehig && e.ausgezahlt) {
+      const st = statusOf(e);
+      if (!st) return;
+      refundByStatus[st].sum += r;
+      refundByStatus[st].count += 1;
+      // Ab "zusage" ist ein Zielkonto hinterlegt; unbekannte Konten gelten als privat.
+      const acc = e.auszahlKonto || e.creditId;
+      const known = acc !== "priv" && perCredit[acc];
+      if (st === "ausgezahlt") {
         refundPaid += r;
-        const acc = e.auszahlKonto || e.creditId;
-        if (acc === "priv") privPayout += r;
-        else {
+        if (known) {
           creditRefundPaid += r;
-          if (perCredit[acc]) perCredit[acc].payout += r;
-          else privPayout += r;
-        }
+          perCredit[acc].payout += r;
+        } else privPayout += r;
+      } else if (st === "zusage") {
+        if (known) {
+          creditRefundZusage += r;
+          perCredit[acc].zusage += r;
+        } else privZusage += r;
       }
     });
     const baseBudget = state.credits.reduce((s, c) => s + (c.total || 0), 0);
     const budget = baseBudget + creditRefundPaid;
+    const remaining = budget - creditSpent;
     return {
       perCredit,
       baseBudget,
@@ -74,10 +97,17 @@ export default function App() {
       refund,
       refundPaid,
       refundOpen: refund - refundPaid,
+      refundByStatus,
+      refundZusage: refundByStatus.zusage.sum,
+      refundPending: refundByStatus.bezahlt.sum + refundByStatus.angegeben.sum,
+      creditRefundZusage,
+      privZusage,
       privSpent,
       privPayout,
       privRemaining: privPayout - privSpent,
-      remaining: budget - creditSpent,
+      remaining,
+      // Zusagen sind verbindlich, liegen aber noch nicht auf dem Konto.
+      plannedRemaining: remaining + creditRefundZusage,
       effective: spent - refund,
     };
   }, [state]);
@@ -161,8 +191,8 @@ export default function App() {
     const sep = ";";
     const head = [
       "Datum", "Bezeichnung", "Kategorie", "Betrag", "Bezahlt von",
-      "Förderfähig", "Förderquote %", "Rückerstattung", "Förderung ausgezahlt",
-      "Ausgezahlt auf Konto",
+      "Förderfähig", "Förderquote %", "Rückerstattung", "Förderstatus",
+      "Zielkonto Förderung",
     ];
     const srcName = (id) =>
       id === "priv"
@@ -171,7 +201,8 @@ export default function App() {
     const rows = [...state.expenses]
       .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
       .map((e) => {
-        const r = e.foerderfaehig ? e.amount * ((e.foerderPercent || 0) / 100) : 0;
+        const r = refundOf(e);
+        const st = statusOf(e);
         return [
           fmtDate(e.date),
           '"' + String(e.desc || "").replace(/"/g, '""') + '"',
@@ -181,8 +212,8 @@ export default function App() {
           e.foerderfaehig ? "Ja" : "Nein",
           e.foerderfaehig ? String(e.foerderPercent || 0) : "",
           r ? r.toFixed(2).replace(".", ",") : "",
-          e.foerderfaehig ? (e.ausgezahlt ? "Ja" : "Nein") : "",
-          e.foerderfaehig && e.ausgezahlt ? srcName(e.auszahlKonto || e.creditId) : "",
+          st ? statusMeta(st).label : "",
+          e.foerderfaehig && e.auszahlKonto ? srcName(e.auszahlKonto) : "",
         ].join(sep);
       });
     const csv = "﻿" + [head.join(sep), ...rows].join("\r\n");
@@ -252,6 +283,25 @@ export default function App() {
           />
         )}
 
+        <nav className="bt-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              className={"bt-tab" + (tab === t.key ? " is-active" : "")}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+              {t.key === "foerder" && calc.refundOpen > 0 && (
+                <span className="bt-tab-dot" aria-hidden="true" />
+              )}
+            </button>
+          ))}
+        </nav>
+
+        {tab === "uebersicht" && (
+        <>
         <section className="bt-hero">
           <div className="bt-hero-top">
             <span className="bt-label">Verfügbarer Restbetrag</span>
@@ -262,12 +312,32 @@ export default function App() {
           <div className={"bt-hero-num" + (over ? " is-warn" : "")}>
             {eur(calc.remaining)}
           </div>
+          {calc.creditRefundZusage > 0 && (
+            <div className="bt-hero-sub">
+              + {eur0(calc.creditRefundZusage)} fest zugesagt ={" "}
+              <strong>{eur0(calc.plannedRemaining)}</strong> planbar
+            </div>
+          )}
 
-          <Meter total={calc.budget + calc.refundOpen} effective={calc.creditSpent} refund={calc.refundOpen} />
+          <Meter
+            total={calc.budget + calc.refundOpen}
+            effective={calc.creditSpent}
+            refund={calc.refundZusage}
+            pending={calc.refundPending}
+          />
 
           <div className="bt-legend">
             <Legend swatch="ink" label="Ausgegeben (Kredit)" value={eur0(calc.creditSpent)} />
-            <Legend swatch="accent" label="Förderung kommt noch" value={eur0(calc.refundOpen)} />
+            {calc.refundZusage > 0 && (
+              <Legend swatch="accent" label="Förderung zugesagt" value={eur0(calc.refundZusage)} />
+            )}
+            {calc.refundPending > 0 && (
+              <Legend
+                swatch="accent-soft"
+                label="Förderung erwartet"
+                value={eur0(calc.refundPending)}
+              />
+            )}
             <Legend swatch="track" label="Verfügbar" value={eur0(Math.max(calc.remaining, 0))} />
           </div>
 
@@ -285,7 +355,9 @@ export default function App() {
               sub={
                 calc.refund > 0
                   ? calc.refundOpen > 0
-                    ? `${eur0(calc.refundOpen)} noch offen`
+                    ? calc.refundZusage > 0
+                      ? `${eur0(calc.refundZusage)} zugesagt · ${eur0(calc.refundPending)} offen`
+                      : `${eur0(calc.refundOpen)} noch offen`
                     : "vollständig ausgezahlt"
                   : null
               }
@@ -311,11 +383,20 @@ export default function App() {
                   Restbetrag von {eur0(avail)}
                   {pc.payout > 0 ? ` · inkl. ${eur0(pc.payout)} Förderung` : ""}
                 </div>
-                <Meter total={avail} effective={pc.spent} refund={0} thin />
+                <Meter
+                  total={avail + pc.zusage}
+                  effective={pc.spent}
+                  refund={pc.zusage}
+                  thin
+                />
                 <div className="bt-credit-foot">
                   <span>Ausgegeben {eur0(pc.spent)}</span>
-                  {pc.payout > 0 && (
-                    <span className="bt-acc">+ {eur0(pc.payout)} gutgeschrieben</span>
+                  {pc.zusage > 0 ? (
+                    <span className="bt-acc">+ {eur0(pc.zusage)} zugesagt</span>
+                  ) : (
+                    pc.payout > 0 && (
+                      <span className="bt-acc">+ {eur0(pc.payout)} gutgeschrieben</span>
+                    )
                   )}
                 </div>
               </div>
@@ -345,16 +426,6 @@ export default function App() {
             </div>
           </div>
         )}
-
-        <StatsPanel
-          expenses={state.expenses}
-          categories={state.categories || CATEGORIES}
-          credits={state.credits}
-          onAssignCategory={(id, category) => updateExpense(id, { category })}
-          onUpdateExpense={updateExpense}
-          onDeleteExpense={deleteExpense}
-          onAddCategory={addCategory}
-        />
 
         <ExpenseForm
           credits={state.credits}
@@ -422,6 +493,33 @@ export default function App() {
             wieder her – ideal zum Übertragen auf ein anderes Gerät.
           </p>
         </section>
+        </>
+        )}
+
+        {tab === "statistik" && (
+          <StatsPanel
+            expenses={state.expenses}
+            categories={state.categories || CATEGORIES}
+            credits={state.credits}
+            onAssignCategory={(id, category) => updateExpense(id, { category })}
+            onUpdateExpense={updateExpense}
+            onDeleteExpense={deleteExpense}
+            onAddCategory={addCategory}
+          />
+        )}
+
+        {tab === "foerder" && (
+          <FoerderPanel
+            expenses={state.expenses}
+            categories={state.categories || CATEGORIES}
+            credits={state.credits}
+            calc={calc}
+            onAdd={addExpense}
+            onUpdateExpense={updateExpense}
+            onDeleteExpense={deleteExpense}
+            onAddCategory={addCategory}
+          />
+        )}
 
         <footer className="bt-foot">
           Daten werden nur auf diesem Gerät gespeichert.

@@ -1,6 +1,7 @@
 import React from "react";
 import { eur, eur0, fmtDate } from "../utils/format";
 import { openAttachment } from "../utils/attachments";
+import { statusOf, statusMeta, needsAccount } from "../utils/foerder";
 import ExpenseForm from "./ExpenseForm";
 
 export default function ExpenseRow({
@@ -12,6 +13,8 @@ export default function ExpenseRow({
   onUpdate,
   onDelete,
   onAddCategory,
+  statusBar = null,
+  foerderOnly = false,
 }) {
   const isPriv = e.creditId === "priv";
   const credit = credits.find((c) => c.id === e.creditId);
@@ -22,6 +25,8 @@ export default function ExpenseRow({
       ? "Privatkonto"
       : credits.find((c) => c.id === payAcc)?.name || "Konto";
   const refund = e.foerderfaehig ? e.amount * ((e.foerderPercent || 0) / 100) : 0;
+  const status = statusOf(e);
+  const meta = statusMeta(status);
 
   return (
     <li className={"bt-row" + (expanded ? " is-open" : "")}>
@@ -52,9 +57,12 @@ export default function ExpenseRow({
                 <span className="bt-chip is-acc">
                   {e.foerderPercent || 0}% · {eur0(refund)} zurück
                 </span>
-                <span className={"bt-chip " + (e.ausgezahlt ? "is-good" : "is-open")}>
-                  {e.ausgezahlt ? `ausgezahlt · ${payName}` : "offen"}
-                </span>
+                {meta && (
+                  <span className={"bt-chip is-" + meta.tone}>
+                    {meta.label}
+                    {needsAccount(status) ? ` · ${payName}` : ""}
+                  </span>
+                )}
               </>
             ) : (
               <span className="bt-chip is-mut">nicht förderfähig</span>
@@ -89,10 +97,12 @@ export default function ExpenseRow({
           </button>
         </div>
       </div>
+      {statusBar && !expanded && statusBar}
       {expanded && (
         <div className="bt-row-editor">
           <ExpenseForm
             inline
+            foerderOnly={foerderOnly}
             credits={credits}
             categories={categories}
             initial={e}

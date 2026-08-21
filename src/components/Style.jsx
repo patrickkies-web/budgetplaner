@@ -73,11 +73,103 @@ export default function Style() {
 .bt-seg{height:100%;transition:width .45s cubic-bezier(.2,.7,.2,1)}
 .seg-ink{background:var(--ink)}
 .seg-acc{background:var(--accent)}
+.seg-acc-soft{
+  background:repeating-linear-gradient(135deg,#A9C2FF 0 5px,#C8D8FF 5px 10px);
+}
+
+/* tabs */
+.bt-tabs{
+  display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);
+  border-radius:999px;padding:4px;margin-bottom:16px;
+}
+.bt-tab{
+  flex:1;min-width:0;border:none;background:transparent;color:var(--muted);
+  font-family:var(--fb);font-size:13px;font-weight:600;padding:9px 6px;border-radius:999px;
+  cursor:pointer;transition:.15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  position:relative;
+}
+.bt-tab:hover{color:var(--ink)}
+.bt-tab.is-active{background:var(--ink);color:#fff}
+.bt-tab-dot{
+  display:inline-block;width:6px;height:6px;border-radius:999px;
+  background:var(--accent);margin-left:5px;vertical-align:middle;
+}
+.bt-tab.is-active .bt-tab-dot{background:#7FA3FF}
+.bt-hero-sub{font-size:12.5px;color:var(--muted);margin:-12px 0 16px}
+.bt-hero-sub strong{color:var(--accent);font-variant-numeric:tabular-nums}
+.bt-pill.is-acc{background:var(--accent-soft);color:var(--accent)}
+
+/* Förder-Status */
+.bt-status-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.bt-status-btn{
+  display:flex;align-items:center;gap:7px;text-align:left;
+  border:1px solid var(--line);background:var(--surface);color:var(--muted);
+  font-family:var(--fb);font-size:12.5px;font-weight:600;padding:10px 10px;
+  border-radius:var(--r-sm);cursor:pointer;transition:.15s;
+}
+.bt-status-btn:hover{border-color:#d6dae0;color:var(--ink)}
+.bt-status-step{
+  width:17px;height:17px;flex:0 0 auto;border-radius:999px;background:var(--track);
+  color:var(--faint);font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;
+}
+.bt-status-btn.is-active{color:#fff;border-color:transparent}
+.bt-status-btn.is-active .bt-status-step{background:rgba(255,255,255,.25);color:#fff}
+.bt-status-btn.is-mut.is-active{background:var(--muted)}
+.bt-status-btn.is-open.is-active{background:#B5780B}
+.bt-status-btn.is-acc.is-active{background:var(--accent)}
+.bt-status-btn.is-good.is-active{background:var(--ok)}
+.bt-status-effect{
+  margin-top:9px;font-size:12px;line-height:1.5;color:var(--muted);
+  background:var(--bg);border-radius:var(--r-sm);padding:9px 11px;
+  border-left:3px solid var(--line);
+}
+.bt-status-effect strong{color:var(--ink)}
+.bt-status-effect.is-open{border-left-color:#B5780B}
+.bt-status-effect.is-acc{border-left-color:var(--accent);background:var(--accent-soft)}
+.bt-status-effect.is-good{border-left-color:var(--ok);background:#E9F7F1}
+
+/* Förder-Pipeline */
+.bt-pipe{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;margin-bottom:16px}
+.bt-pipe-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.bt-pipe-card{
+  display:flex;flex-direction:column;gap:3px;text-align:left;
+  border:1px solid var(--line);background:var(--surface);border-radius:var(--r-md);
+  padding:11px 12px;cursor:pointer;transition:.15s;font-family:var(--fb);
+}
+.bt-pipe-card:hover{border-color:#d6dae0;background:var(--bg)}
+.bt-pipe-card.is-active{border-color:var(--ink);box-shadow:0 0 0 2px var(--line-soft)}
+.bt-pipe-step{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.bt-pipe-sum{font-family:var(--fd);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.bt-pipe-count{font-size:11px;color:var(--faint)}
+.bt-pipe-card.is-acc .bt-pipe-sum{color:var(--accent)}
+.bt-pipe-card.is-good .bt-pipe-sum{color:var(--ok)}
+.bt-dot-tone{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:middle;margin-right:2px}
+.bt-dot-tone.is-mut{background:var(--faint)}
+.bt-dot-tone.is-open{background:#B5780B}
+.bt-dot-tone.is-acc{background:var(--accent)}
+.bt-dot-tone.is-good{background:var(--ok)}
+
+/* Status-Schnellwechsel in der Liste */
+.bt-statusbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 0 12px}
+.bt-statusbar-l{font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.bt-statusbar-btns{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
+.bt-statusbar-btn{
+  border:1px solid var(--line-soft);background:var(--surface);color:var(--faint);
+  font-family:var(--fb);font-size:11px;font-weight:600;padding:5px 9px;border-radius:999px;
+  cursor:pointer;transition:.15s;
+}
+.bt-statusbar-btn:hover{border-color:var(--faint);color:var(--ink)}
+.bt-statusbar-btn.is-active{color:#fff;border-color:transparent}
+.bt-statusbar-btn.is-mut.is-active{background:var(--muted)}
+.bt-statusbar-btn.is-open.is-active{background:#B5780B}
+.bt-statusbar-btn.is-acc.is-active{background:var(--accent)}
+.bt-statusbar-btn.is-good.is-active{background:var(--ok)}
 
 .bt-legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px}
 .bt-leg{display:flex;align-items:center;gap:7px;font-size:12.5px}
 .bt-sw{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
 .sw-ink{background:var(--ink)} .sw-accent{background:var(--accent)} .sw-track{background:var(--track);border:1px solid var(--line)}
+.sw-accent-soft{background:repeating-linear-gradient(135deg,#A9C2FF 0 3px,#C8D8FF 3px 6px)}
 .bt-leg-l{color:var(--muted)}
 .bt-leg-v{font-weight:600;font-variant-numeric:tabular-nums}
 

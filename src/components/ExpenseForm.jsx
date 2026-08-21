@@ -1,15 +1,27 @@
 import React, { useState, useEffect, useRef } from "react";
 import { parseNum, clamp, eur, todayISO } from "../utils/format";
 import { processFile, attachSet, attachDel } from "../utils/attachments";
+import { FOERDER_STATUS } from "../constants";
+import { statusOf, statusMeta, needsAccount } from "../utils/foerder";
 
-export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCancelEdit, initial, onAddCategory, inline = false }) {
+export default function ExpenseForm({
+  credits,
+  categories,
+  onAdd,
+  onUpdate,
+  onCancelEdit,
+  initial,
+  onAddCategory,
+  inline = false,
+  foerderOnly = false,
+}) {
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
   const [date, setDate] = useState(todayISO());
   const [creditId, setCreditId] = useState(credits[0]?.id || "k1");
-  const [foerder, setFoerder] = useState(false);
+  const [foerder, setFoerder] = useState(foerderOnly);
   const [pct, setPct] = useState("");
-  const [paid, setPaid] = useState(false);
+  const [status, setStatus] = useState("bezahlt");
   const [payTo, setPayTo] = useState(null);
   const [category, setCategory] = useState("");
   const [addingCat, setAddingCat] = useState(false);
@@ -23,9 +35,9 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
     setDesc("");
     setDate(todayISO());
     setCreditId(credits[0]?.id || "k1");
-    setFoerder(false);
+    setFoerder(foerderOnly);
     setPct("");
-    setPaid(false);
+    setStatus("bezahlt");
     setPayTo(null);
     setCategory("");
     setFiles([]);
@@ -41,9 +53,9 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
     setDesc(initial.desc || "");
     setDate(initial.date || todayISO());
     setCreditId(initial.creditId || credits[0]?.id || "k1");
-    setFoerder(!!initial.foerderfaehig);
+    setFoerder(!!initial.foerderfaehig || foerderOnly);
     setPct(initial.foerderPercent ? String(initial.foerderPercent) : "");
-    setPaid(!!initial.ausgezahlt);
+    setStatus(statusOf(initial) || "bezahlt");
     setPayTo(initial.auszahlKonto || null);
     setCategory(initial.category || "");
     setFiles((initial.attachments || []).map((a) => ({ ...a, isExisting: true })));
@@ -94,8 +106,10 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
       category,
       foerderfaehig: foerder,
       foerderPercent: foerder ? clamp(parseNum(pct), 0, 100) : 0,
-      ausgezahlt: foerder ? paid : false,
-      auszahlKonto: foerder && paid ? payTo || creditId : null,
+      foerderStatus: foerder ? status : null,
+      ausgezahlt: foerder && status === "ausgezahlt",
+      auszahlKonto:
+        foerder && needsAccount(status) ? payTo || creditId : null,
       attachments: files.map(({ id, name, type }) => ({ id, name, type })),
     };
     if (initial) {
@@ -123,7 +137,13 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
       ref={sectionRef}
     >
       {!inline && (
-        <h2 className="bt-h2">{isEditMode ? "Ausgabe bearbeiten" : "Neue Ausgabe"}</h2>
+        <h2 className="bt-h2">
+          {isEditMode
+            ? "Ausgabe bearbeiten"
+            : foerderOnly
+            ? "Neue förderfähige Ausgabe"
+            : "Neue Ausgabe"}
+        </h2>
       )}
 
       <div className="bt-form-grid">
@@ -222,23 +242,25 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
         </div>
       </div>
 
-      <div className="bt-field">
-        <label className="bt-flabel">Förderfähig?</label>
-        <div className="bt-seg-ctrl">
-          <button
-            className={"bt-seg-btn" + (!foerder ? " is-active" : "")}
-            onClick={() => setFoerder(false)}
-          >
-            Nein
-          </button>
-          <button
-            className={"bt-seg-btn" + (foerder ? " is-active is-acc" : "")}
-            onClick={() => setFoerder(true)}
-          >
-            Ja
-          </button>
+      {!foerderOnly && (
+        <div className="bt-field">
+          <label className="bt-flabel">Förderfähig?</label>
+          <div className="bt-seg-ctrl">
+            <button
+              className={"bt-seg-btn" + (!foerder ? " is-active" : "")}
+              onClick={() => setFoerder(false)}
+            >
+              Nein
+            </button>
+            <button
+              className={"bt-seg-btn" + (foerder ? " is-active is-acc" : "")}
+              onClick={() => setFoerder(true)}
+            >
+              Ja
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {foerder && (
         <div className="bt-field bt-reveal">
@@ -274,27 +296,37 @@ export default function ExpenseForm({ credits, categories, onAdd, onUpdate, onCa
           )}
 
           <label className="bt-flabel" style={{ marginTop: 14 }}>
-            Schon ausgezahlt?
+            Wie weit ist die Förderung?
           </label>
-          <div className="bt-seg-ctrl">
-            <button
-              className={"bt-seg-btn" + (!paid ? " is-active" : "")}
-              onClick={() => setPaid(false)}
-            >
-              Noch offen
-            </button>
-            <button
-              className={"bt-seg-btn" + (paid ? " is-active is-good" : "")}
-              onClick={() => setPaid(true)}
-            >
-              Ausgezahlt
-            </button>
+          <div className="bt-status-grid">
+            {FOERDER_STATUS.map((s, i) => (
+              <button
+                key={s.key}
+                type="button"
+                className={
+                  "bt-status-btn is-" + s.tone + (status === s.key ? " is-active" : "")
+                }
+                onClick={() => setStatus(s.key)}
+                title={s.hint}
+              >
+                <span className="bt-status-step">{i + 1}</span>
+                {s.label}
+              </button>
+            ))}
           </div>
+          {statusMeta(status) && (
+            <div className={"bt-status-effect is-" + statusMeta(status).tone}>
+              <strong>{statusMeta(status).hint}.</strong>{" "}
+              {statusMeta(status).effect}
+            </div>
+          )}
 
-          {paid && (
+          {needsAccount(status) && (
             <div className="bt-reveal">
               <label className="bt-flabel" style={{ marginTop: 14 }}>
-                Auf welches Konto ausgezahlt?
+                {status === "ausgezahlt"
+                  ? "Auf welches Konto ausgezahlt?"
+                  : "Auf welchem Konto wird gutgeschrieben?"}
               </label>
               <div className="bt-seg-ctrl">
                 {[...credits, { id: "priv", name: "Privatkonto" }].map((c) => (
