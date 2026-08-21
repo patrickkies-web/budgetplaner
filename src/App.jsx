@@ -12,12 +12,14 @@ import ExpenseForm from "./components/ExpenseForm";
 import ExpenseRow from "./components/ExpenseRow";
 import StatsPanel from "./components/StatsPanel";
 import FoerderPanel from "./components/FoerderPanel";
+import StepsPanel from "./components/StepsPanel";
 import Style from "./components/Style";
 
 const TABS = [
   { key: "uebersicht", label: "Übersicht" },
-  { key: "statistik", label: "Statistiken" },
-  { key: "foerder", label: "Förderungen" },
+  { key: "schritte", label: "Schritte" },
+  { key: "statistik", label: "Statistik" },
+  { key: "foerder", label: "Förderung" },
 ];
 
 function structuredCloneSafe(obj) {
@@ -158,6 +160,31 @@ export default function App() {
     });
   };
 
+  const addStep = (name) => {
+    const n = (name || "").trim();
+    if (!n) return;
+    update((s) => {
+      s.steps = [...(s.steps || []), { id: uid(), name: n }];
+      return s;
+    });
+  };
+
+  const renameStep = (id, name) =>
+    update((s) => {
+      s.steps = (s.steps || []).map((t) => (t.id === id ? { ...t, name } : t));
+      return s;
+    });
+
+  // Schritt löschen lässt die Ausgaben bestehen – sie sind danach nur zuordnungslos.
+  const removeStep = (id) =>
+    update((s) => {
+      s.steps = (s.steps || []).filter((t) => t.id !== id);
+      s.expenses = s.expenses.map((e) =>
+        e.stepId === id ? { ...e, stepId: null } : e
+      );
+      return s;
+    });
+
   const removeCategory = (name) =>
     update((s) => {
       s.categories = (s.categories || []).filter((c) => c !== name);
@@ -190,7 +217,7 @@ export default function App() {
   const exportCSV = () => {
     const sep = ";";
     const head = [
-      "Datum", "Bezeichnung", "Kategorie", "Betrag", "Bezahlt von",
+      "Datum", "Bezeichnung", "Arbeitsschritt", "Kategorie", "Betrag", "Bezahlt von",
       "Förderfähig", "Förderquote %", "Rückerstattung", "Förderstatus",
       "Zielkonto Förderung",
     ];
@@ -206,6 +233,7 @@ export default function App() {
         return [
           fmtDate(e.date),
           '"' + String(e.desc || "").replace(/"/g, '""') + '"',
+          (state.steps || []).find((t) => t.id === e.stepId)?.name || "",
           e.category || "",
           (e.amount || 0).toFixed(2).replace(".", ","),
           srcName(e.creditId),
@@ -453,6 +481,9 @@ export default function App() {
                   credits={state.credits}
                   categories={state.categories || CATEGORIES}
                   expanded={expandedId === e.id}
+                  stepName={
+                    (state.steps || []).find((t) => t.id === e.stepId)?.name || null
+                  }
                   onToggle={() => setExpandedId(expandedId === e.id ? null : e.id)}
                   onUpdate={(changes) => {
                     updateExpense(e.id, changes);
@@ -494,6 +525,22 @@ export default function App() {
           </p>
         </section>
         </>
+        )}
+
+        {tab === "schritte" && (
+          <StepsPanel
+            expenses={state.expenses}
+            steps={state.steps || []}
+            categories={state.categories || CATEGORIES}
+            credits={state.credits}
+            onAddStep={addStep}
+            onRenameStep={renameStep}
+            onRemoveStep={removeStep}
+            onAssignStep={(id, stepId) => updateExpense(id, { stepId })}
+            onUpdateExpense={updateExpense}
+            onDeleteExpense={deleteExpense}
+            onAddCategory={addCategory}
+          />
         )}
 
         {tab === "statistik" && (
