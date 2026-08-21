@@ -35,7 +35,7 @@ export default function FoerderPanel({
     <>
       <section className="bt-hero">
         <div className="bt-hero-top">
-          <span className="bt-label">Verfügbar inkl. Zusagen</span>
+          <span className="bt-label">Planbare Mittel</span>
           {calc.refundOpen > 0 && (
             <span className="bt-pill is-acc">{eur0(calc.refundOpen)} unterwegs</span>
           )}
@@ -54,25 +54,25 @@ export default function FoerderPanel({
           <Stat3
             label="Ausgezahlt"
             value={eur(byStatus.ausgezahlt.sum)}
-            sub="schon auf dem Konto"
+            sub="auf dem Konto"
             tone="good"
           />
           <Stat3
             label="Fest zugesagt"
             value={eur(byStatus.zusage.sum)}
-            sub="erhöht die planbaren Mittel"
+            sub="planbar"
             tone="acc"
           />
           <Stat3
             label="Beantragt"
             value={eur(byStatus.angegeben.sum)}
-            sub="Entscheidung offen"
+            sub="offen"
             tone="open"
           />
           <Stat3
             label="Nur kalkuliert"
             value={eur(byStatus.bezahlt.sum)}
-            sub="noch nicht eingereicht"
+            sub="nicht eingereicht"
             tone="mut"
           />
         </div>
