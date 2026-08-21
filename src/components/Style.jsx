@@ -54,13 +54,14 @@ export default function Style() {
   background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
   padding:22px 20px;margin-bottom:16px;box-shadow:0 1px 2px rgba(20,24,32,.03),0 12px 30px -18px rgba(20,24,32,.18);
 }
-.bt-hero-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.bt-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600}
-.bt-pill{font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px}
+.bt-hero-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 10px;margin-bottom:8px}
+/* Label nie unter seine längste Silbe stauchen – lieber rutscht die Pille in die nächste Zeile. */
+.bt-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;min-width:min-content}
+.bt-pill{font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px;white-space:nowrap;flex:0 0 auto}
 .bt-pill.is-ok{background:#E9F7F1;color:var(--ok)}
 .bt-pill.is-warn{background:#FCEBEB;color:var(--warn)}
 .bt-hero-num{
-  font-family:var(--fd);font-size:40px;font-weight:600;letter-spacing:-.02em;
+  font-family:var(--fd);font-size:clamp(28px,9.5vw,40px);font-weight:600;letter-spacing:-.02em;
   font-variant-numeric:tabular-nums;line-height:1.05;margin:2px 0 18px;
 }
 .bt-hero-num.is-warn{color:var(--warn)}
@@ -83,18 +84,24 @@ export default function Style() {
   border-radius:999px;padding:4px;margin-bottom:16px;
 }
 .bt-tab{
-  flex:1;min-width:0;border:none;background:transparent;color:var(--muted);
+  flex:1 1 auto;min-width:0;border:none;background:transparent;color:var(--muted);
   font-family:var(--fb);font-size:12.5px;font-weight:600;padding:9px 4px;border-radius:999px;
   cursor:pointer;transition:.15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   position:relative;
 }
 .bt-tab:hover{color:var(--ink)}
 .bt-tab.is-active{background:var(--ink);color:#fff}
+/* Der Punkt sitzt absolut, damit er dem Label keine Breite wegnimmt. */
 .bt-tab-dot{
-  display:inline-block;width:6px;height:6px;border-radius:999px;
-  background:var(--accent);margin-left:5px;vertical-align:middle;
+  position:absolute;top:7px;right:10px;width:5px;height:5px;border-radius:999px;
+  background:var(--accent);
 }
 .bt-tab.is-active .bt-tab-dot{background:#7FA3FF}
+@media(max-width:430px){
+  .bt-tabs{gap:2px;padding:3px}
+  .bt-tab{font-size:11.5px;padding:9px 2px;letter-spacing:-.01em}
+  .bt-tab-dot{top:6px;right:6px}
+}
 .bt-hero-sub{font-size:12.5px;color:var(--muted);margin:-12px 0 16px}
 .bt-hero-sub strong{color:var(--accent);font-variant-numeric:tabular-nums}
 .bt-pill.is-acc{background:var(--accent-soft);color:var(--accent)}
@@ -164,7 +171,7 @@ export default function Style() {
 .bt-step-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
 .bt-step-name{
   display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--ink);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  min-width:0;flex-wrap:wrap;overflow-wrap:anywhere;
 }
 .bt-step-meter{display:block}
 .bt-step-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}

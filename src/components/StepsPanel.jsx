@@ -347,7 +347,7 @@ export default function StepsPanel({
       <div className="bt-step-list">
         {groups.map(({ step, items }) => renderBar(step.id, step.name, items, true))}
         {unassigned.length > 0 &&
-          renderBar(UNASSIGNED, "Ohne Arbeitsschritt", unassigned, false)}
+          renderBar(UNASSIGNED, "Ohne Schritt", unassigned, false)}
       </div>
     </section>
   );
